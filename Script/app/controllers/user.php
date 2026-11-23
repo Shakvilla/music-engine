@@ -481,7 +481,7 @@ class UserController extends Controller {
                 'value' => url()
             ));
         }
-        return $this->render($this->view('user/reset'));
+        return $this->render($this->view('auth/screen', array('heading'=>'choose-new-password', 'content'=>$this->view('user/reset'))));
     }
 
     public function userSuggests() {

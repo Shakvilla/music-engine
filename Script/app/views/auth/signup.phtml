@@ -1,65 +1,53 @@
-<div class="auth-container">
-    <div class="content clearfix">
-        <div class="auth-left topography">
-            <div class="topography-cover"></div>
+<?php $isDialog = !empty($isDialog); $prefix = $isDialog ? 'dialog-signup' : 'auth-signup'; ?>
+<form action="<?php echo url('signup')?>" class="general-form bc-signup" method="post">
+
+    <div class="bc-signup-fields">
+        <div class="form-group">
+            <label class="bc-auth-label" for="<?php echo $prefix?>-val-full-name"><?php _l('full_name')?></label>
+            <input id="<?php echo $prefix?>-val-full-name" autocomplete="name" type="text" name="val[full_name]" class="form-control "/>
         </div>
-        <div class="auth-right">
-            <img class="light-logo" src="<?php echo config('site_logo', 'assets/images/logo.png')?>"/>
-            <img class="dark-logo" src="<?php echo config('site_logo_dark', 'assets/images/logo-dark.png')?>"/>
+        <div class="form-group">
+            <label class="bc-auth-label" for="<?php echo $prefix?>-val-username"><?php _l('username')?></label>
+            <input id="<?php echo $prefix?>-val-username" autocomplete="username" type="text" name="val[username]" class="form-control "/>
+        </div>
 
-            <div class="login-for">
-                <form action="<?php echo url('signup')?>" class="general-form" method="post">
-                    <?php if(config('enable-facebook', false)):?>
+        <div class="form-group">
+            <label class="bc-auth-label" for="<?php echo $prefix?>-val-email"><?php _l('email_address')?></label>
+            <input id="<?php echo $prefix?>-val-email" autocomplete="email" type="email" name="val[email]" class="form-control "/>
+        </div>
 
-                        <a href="<?php echo url('auth/facebook')?>" class="btn btn-block fb-button"><i class="la la-facebook-f"></i> <?php _l('login-with-facebook')?></a>
-                        <div class="content-line">
-                            <span><?php _l('or')?></span>
-                        </div>
-                    <?php endif?>
-
-
-                    <div class="form-group">
-                        <input type="text" name="val[full_name]" class="form-control " placeholder="<?php _l('full_name')?>"/>
-                    </div>
-                    <div class="form-group">
-                        <input type="text" name="val[username]" class="form-control " placeholder="<?php _l('username')?>"/>
-                    </div>
-
-                    <div class="form-group">
-                        <input type="email" name="val[email]" class="form-control " placeholder="<?php _l('email_address')?>"/>
-                    </div>
-
-                    <div class="form-group">
-                        <input name="val[password]" type="password" class="form-control" placeholder="<?php _l('password')?>"/>
-                    </div>
-
-                    <?php Hook::getInstance()->fire('user.signup.form')?>
-                    <?php if(config('user-signup-artist', true)):?>
-                        <label class="custom-control custom-checkbox">
-                            <input name="val[artist]"  value="1" type="checkbox" class="custom-control-input">
-                            <span class="custom-control-indicator"></span>
-                            <span class="custom-control-description mt-1"><?php _l('i-am-artist')?></span>
-                        </label>
-                    <?php endif?>
-
-                    <?php if(config('enable-captcha', true)):?>
-                        <div class="captch-form mb-4">
-                            <div class="clearfix mb-3">
-                                <img class="float-left" style="width: 80%;" id="captcha" src="<?php echo assetUrl('captcha/securimage_show.php')?>" alt="CAPTCHA Image" />
-                                <a class="float-right" style="font-size: 20px;" href="#" onclick="document.getElementById('captcha').src = '<?php echo assetUrl('captcha/securimage_show.php')?>?' + Math.random(); return false">
-                                    <i class="la  la-refresh"></i>
-                                </a>
-                            </div>
-                            <input type="text" autocomplete="off" placeholder="<?php _l('enter-captcha-code')?>" class="form-control" name="captcha"/>
-                        </div>
-                    <?php endif?>
-                    <button type="submit" data-size="s" data-style="zoom-in" style="padding-left: 30px;padding-right: 30px;" class="btn btn-primary round-sm ladda-button" id="signup-submit"><?php _l('submit')?></button>
-                </form>
-
-                <p class=" mt-4">
-                    <?php _l('already-a-member')?>  <a  style="font-weight: 600;" href="<?php echo url('login')?>"><?php _l('login-here')?></a>
-                </p>
-            </div>
+        <div class="form-group">
+            <label class="bc-auth-label" for="<?php echo $prefix?>-val-password"><?php _l('password')?></label>
+            <input id="<?php echo $prefix?>-val-password" autocomplete="new-password" name="val[password]" type="password" class="form-control"/>
         </div>
     </div>
-</div>
+
+    <?php Hook::getInstance()->fire('user.signup.form')?>
+    <?php if(config('user-signup-artist', true)):?>
+        <label class="custom-control custom-checkbox">
+            <input name="val[artist]"  value="1" type="checkbox" class="custom-control-input">
+            <span class="custom-control-indicator"></span>
+            <span class="custom-control-description mt-1"><?php _l('i-am-artist')?></span>
+        </label>
+    <?php endif?>
+
+    <?php if(config('enable-captcha', true)):?>
+        <div class="captch-form bc-signup-captcha">
+            <div class="bc-challenge">
+                <img id="captcha" src="<?php echo assetUrl('captcha/securimage_show.php')?>" alt="CAPTCHA Image" />
+                <a aria-label="<?php _l('refresh')?>" href="#" onclick="this.previousElementSibling.src = '<?php echo assetUrl('captcha/securimage_show.php')?>?' + Math.random(); return false">
+                    <i class="la  la-refresh"></i>
+                </a>
+            </div>
+            <div class="bc-captcha-answer">
+                <label class="bc-auth-label" for="<?php echo $prefix?>-captcha"><?php _l('enter-captcha-code')?></label>
+                <input id="<?php echo $prefix?>-captcha" autocomplete="off" type="text" class="form-control" name="captcha"/>
+            </div>
+        </div>
+    <?php endif?>
+    <button type="submit" data-size="s" data-style="zoom-in" style="padding-left: 30px;padding-right: 30px;" class="btn btn-primary round-sm ladda-button" id="<?php echo $prefix?>-submit"><?php _l('create-account')?></button>
+</form>
+
+<p class="bc-signup-footer">
+    <?php _l('already-a-member')?>  <a  href="<?php echo url('login')?>" <?php if ($isDialog):?>onclick="return changeAuthModal('.login-form', true)"<?php endif?>><?php _l('login-here')?></a>
+</p>

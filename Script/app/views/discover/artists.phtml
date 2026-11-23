@@ -2,7 +2,7 @@
     data-paginate-url="artists/paginate"
     data-offset="0"
     data-param="<?php echo perfectSerialize(array('limit' => 20))?>"
-    class="playlists-container grid-container clearfix"
+    class="playlists-container grid-container bc-artist-grid"
     id="artists-top">
 
     <?php $users = $C->model('user')->getPeople('top', '',20,0)?>

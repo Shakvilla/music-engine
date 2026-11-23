@@ -6,6 +6,9 @@
     <div class="playlist-url-<?php echo $playlist['id']?>" data-link="<?php echo model('track')->playlistUrl($playlist)?>"></div>
 
     <div class="art track-hover-display-container" id="each-playlist-grid-<?php echo $playlist['id']?>" style="background-image: url(<?php echo $C->model('track')->getPlaylistArt($playlist, $user,$track, 600);?>)">
+        <?php if (!empty($albumShelf) && moduleExists('store') && !empty($playlist['price']) && $playlist['price'] > 0):?>
+            <span class="bc-album-price"><?php echo formatMoney($playlist['price'])?></span>
+        <?php endif?>
         <div class="play-container track-hover-display">
             <a href=""
                data-id="<?php echo $track['id']?>"
@@ -35,6 +38,15 @@
             </div>
         </div>
     </div>
+    <?php if (!empty($albumShelf)):?>
+        <div class="bc-album-caption">
+            <a class="bc-album-artist" data-ajax="true" href="<?php echo $C->model('user')->profileUrl($user)?>"><?php echo format_output_text($user['full_name'])?></a>
+            <a class="bc-album-title" data-ajax="true" href="<?php echo $C->model('track')->playlistUrl($playlist)?>"><?php echo format_output_text($playlist['name'])?></a>
+            <?php if ($playlist['time'] >= strtotime('-30 days')):?>
+                <small class="bc-new-label"><?php _l('new-album')?></small>
+            <?php endif?>
+        </div>
+    <?php else:?>
     <div class="grid-title-container">
         <a href="<?php echo $C->model('track')->playlistUrl($playlist)?>" data-ajax="true" ><h1 class="grid-title"><b><?php echo format_output_text($playlist['name'])?></b></h1></a>
         <span class="grid-info">
@@ -46,4 +58,5 @@
                 <?php echo $C->view('user/badge', array('userid'=> $user['id']))?>
             </a></span>
     </div>
+    <?php endif?>
 </div>

@@ -1,0 +1,8 @@
+<?php if (config('enable-facebook', false)):?>
+    <div class="bc-social-login">
+        <a class="bc-provider-link" href="<?php echo url('auth/facebook')?>">
+            <span class="bc-provider-mark" aria-hidden="true"><i class="fa fa-facebook"></i></span>
+            <span><?php _l('continue-with-facebook')?></span>
+        </a>
+    </div>
+<?php endif?>

@@ -1,4 +1,4 @@
-<div id="sideHeader">
+<div id="sideHeader"<?php if ($C->model('user')->isLoggedIn()):?> class="bc-user-rail"<?php endif?>>
     <div class="top clearfix">
         <div class="float-left">
             <a class="navbar-brand " <?php echo ($C->model('user')->isLoggedIn()) ? 'data-ajax="true"' : null?> href="<?php echo url()?>">
@@ -18,12 +18,18 @@
                 <?php endforeach;?>
             </div>
         </div>
+        <?php if ($C->model('user')->isLoggedIn()):?>
+            <button type="button" class="bc-rail-close" aria-label="<?php _l('close')?>">&times;</button>
+        <?php endif?>
     </div>
 
-    <div id="side-menu">
+    <nav id="side-menu">
         <?php echo $sideMenu?>
-    </div>
+    </nav>
 </div>
+<?php if ($C->model('user')->isLoggedIn()):?>
+    <div class="bc-rail-shade" aria-hidden="true"></div>
+<?php endif?>
 <div id="page-container">
     <?php echo $content?>
 </div>

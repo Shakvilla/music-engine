@@ -1,16 +1,33 @@
-<div class="homepage-container">
-    <div class="topography">
-        <div class="topography-cover"></div>
-        <div class="inner-container">
-            <div class="topo-header clearfix">
-                <div class="float-left">
-                    <a class="navbar-brand" href="#">
-                        <img class="light-logo" src="<?php echo config('site_logo_dark', 'assets/images/logo.png')?>"/>
-                        <img class="dark-logo" src="<?php echo config('site_logo_dark', 'assets/images/logo-dark.png')?>"/>
-                    </a>
-                </div>
-                <div class="float-right">
-                    <ul>
+<?php
+$library = $C->model('track');
+$visibleTrack = function ($track) use ($library) {
+    return $library->displayItem($track);
+};
+$releases = array_filter($library->getTracks('latest', '', 0, 4), $visibleTrack);
+$hot = array_filter($library->getTracks('charts-new-hot', 'all/this-week', 0, 6), $visibleTrack);
+$modelUser = $C->model('user');
+$e = function ($value) { return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8'); };
+?>
+<link rel="stylesheet" href="<?php echo assetUrl('styles/main/css/landing.css')?>?v=<?php echo filemtime(path('styles/main/css/landing.css'))?>">
+<div class="homepage-container bc-landing">
+    <header class="bc-wrap bc-header">
+        <a class="navbar-brand" href="<?php echo url('')?>">
+            <img class="light-logo" alt="<?php echo $e(config('site-title'))?>" src="<?php echo $e(config('site_logo', 'assets/images/logo.png'))?>">
+            <img class="dark-logo" alt="<?php echo $e(config('site-title'))?>" src="<?php echo $e(config('site_logo_dark', 'assets/images/logo-dark.png'))?>">
+        </a>
+        <nav class="bc-nav">
+            <a href="<?php echo url('discover')?>"><?php _l('browse')?></a>
+            <a href="#bc-releases"><?php _l('new-releases')?></a>
+            <a href="#bc-charts"><?php _l('charts')?></a>
+        </nav>
+        <div class="bc-tools">
+            <details class="bc-search"><summary aria-label="<?php _l('search')?>"><i class="la la-search"></i></summary>
+                <form action="<?php echo url('search')?>" method="post" role="search">
+                    <input name="term" type="search" required aria-label="<?php _l('search')?>" placeholder="<?php _l('search-for-artists-tracks')?>">
+                    <button><?php _l('search')?></button>
+                </form>
+            </details>
+<ul>
                         <li><a href="" title="<?php _l('change-theme-mode')?>" onclick="return change_theme_mode('<?php echo getThemeMode()?>')" class="theme-mode-button mtitle"><i class="la la-lightbulb-o"></i></a> </li>
                         <li class="dropdown">
                             <?php $languages = Translator::instance()->getAvailableLanguages()?>
@@ -24,58 +41,92 @@
                             </div>
                         </li>
                     </ul>
-                </div>
-            </div>
-
-            <div class="topography-content">
-                <div class="topo-hero" data-animation="slideInLeft" data-animation-delay="400">
-                    <div class="">
-                        <?php if(!config('separate-login', 0)):?>
-                            <a class="btn btn-white-border mr-4" href="#" onclick="return changeAuthModal('.login-form')" ><?php _l('sign-in')?></a>
+<?php if(!config('separate-login', 0)):?>
+                            <a class="bc-signin" href="#" onclick="return changeAuthModal('.login-form')" ><?php _l('sign-in')?></a>
                             <?php if(config('user-signup', true)):?>
-                                <a href="#" onclick="return changeAuthModal('.signup-form')" class="btn btn-white-bg"><?php _l('create-account')?></a>
+                                <a href="#" onclick="return changeAuthModal('.signup-form')" class="bc-button"><?php _l('create-account')?></a>
                             <?php endif?>
                         <?php else:?>
-                            <a class="btn btn-white-border mr-4" href="<?php echo url('login')?>" ><?php _l('sign-in')?></a>
+                            <a class="bc-signin" href="<?php echo url('login')?>" ><?php _l('sign-in')?></a>
                             <?php if(config('user-signup', true)):?>
-                                <a href="<?php echo url('signup')?>"  class="btn btn-white-bg"><?php _l('create-account')?></a>
+                                <a href="<?php echo url('signup')?>"  class="bc-button"><?php _l('create-account')?></a>
                             <?php endif?>
                         <?php endif?>
-                    </div>
-
-                    <div class="mt-5">
-                        <h1><?php _l('find-the-music')?> <span class="colored"><?php _l('you-love')?></span>. </h1>
-                        <h4 class="mt-4"><?php _l('discover-new-tracks-title')?></h4>
+        </div>
+    </header>
+    <section id="bc-features" class="bc-wrap bc-feature carousel slide" data-interval="false" aria-label="<?php _l('discover')?>">
+        <div class="carousel-inner">
+            <?php foreach (array(
+                array(l('landing-find-favourite', array(), l('find-the-music').' '.l('you-love').'.'), strip_tags(str_replace('<br/>', ' ', l('discover-new-tracks-title'))), 'browse', 'discover'),
+                array(l('new-hot'), l('this-week'), 'charts', 'charts'),
+                array(l('latest-tracks'), l('new-releases'), 'see-all', 'discover/latest')
+            ) as $index => $slide):?>
+                <div class="carousel-item<?php if (!$index) echo ' active'?>">
+                    <div class="bc-feature-body">
+                        <div><h1><?php echo $e($slide[0])?></h1><p><?php echo $e($slide[1])?></p>
+                        <a class="bc-button" href="<?php echo url($slide[3])?>"><?php _l($slide[2])?> ↗</a>
+                        <a class="bc-secondary" href="#bc-charts"><?php _l('top-songs')?></a></div>
+                        <div class="bc-sleeves bc-sleeves-<?php echo $index?>" aria-hidden="true"><b></b><b></b><b></b></div>
                     </div>
                 </div>
-
-            </div>
-
+            <?php endforeach?>
         </div>
-
-        <div></div>
-    </div>
-    <div class="bg-section-search">
-        <div class="section">
-            <div class="inner-container">
-                <form action="<?php echo url('search')?>" method="post" class="search-hero" >
-                    <input type="text" name="term" placeholder="<?php _l('search-for-artists-tracks')?>"/>
-                    <i class="la la-search"></i>
-                </form>
-
-            </div>
-
+        <div class="bc-controls"><ol class="carousel-indicators bc-indicators" aria-hidden="true"><li class="active" data-target="#bc-features" data-slide-to="0"></li><li data-target="#bc-features" data-slide-to="1"></li><li data-target="#bc-features" data-slide-to="2"></li></ol><button data-target="#bc-features" data-slide="prev" aria-label="<?php echo $e(l('previous'))?>">←</button><button data-target="#bc-features" data-slide="next" aria-label="<?php _l('next')?>">→</button></div>
+    </section>
+    <?php foreach (array(
+        array('bc-releases', 'new-releases', 'discover/latest', $releases),
+        array('bc-hot', 'new-hot', 'charts', $hot)
+    ) as list($sectionId, $label, $destination, $items)): if (!$items) continue; ?>
+    <section id="<?php echo $sectionId?>" class="bc-wrap bc-shelf">
+        <header><h2><?php _l($label)?></h2><a href="<?php echo url($destination)?>"><?php _l('see-all')?> ↗</a></header>
+        <div class="bc-cards">
+        <?php foreach ($items as $track): $artist = $modelUser->getUser($track['userid']); ?>
+            <a href="<?php echo $e($library->trackUrl($track))?>">
+                <span class="bc-cover">
+                    <img loading="lazy" alt="" src="<?php echo $e($library->getArt($track, 600))?>">
+                    <?php if (moduleExists('store') && !empty($track['price']) && $track['price'] > 0):?>
+                        <span class="bc-price"><?php echo formatMoney($track['price'])?></span>
+                    <?php endif?>
+                </span>
+                <strong><?php echo $e($track['title'])?></strong>
+                <small><?php echo $e($artist['full_name'])?> · <?php echo $e($library->formatDuration($track['track_duration']))?></small>
+            </a>
+        <?php endforeach?>
         </div>
-
-    </div>
-    <input type="text" name="city"  class="form-control geo-input" autocomplete="off">
-    <div class="inner-container ">
-        <div class="row mt-4" style="margin-bottom: 50px;">
+    </section>
+    <?php endforeach?>
+    <section class="bc-wrap bc-promo">
+        <div><h2><?php _l('calling-all-creators')?></h2>
+            <p><?php echo $e(strip_tags(l('calling-all-creators-note')).config('site-title'))?></p>
+            <?php if (config('user-signup', true)):?>
+                <a class="bc-button" href="<?php echo url('signup')?>" <?php if (!config('separate-login', 0)):?>onclick="return changeAuthModal('.signup-form')"<?php endif?>><?php _l('create-account')?> ↗</a>
+            <?php endif?>
+            <?php if (config('enable-premium', false)):?><a class="bc-secondary" href="<?php echo url('pro')?>"><?php _l('go-pro')?></a><?php endif?>
+        </div>
+        <div class="bc-records" aria-hidden="true"><i></i><i></i><i></i></div>
+    </section>
+    <section id="bc-coming-soon" class="bc-wrap bc-shelf" aria-labelledby="bc-upcoming-heading">
+        <header><h2 id="bc-upcoming-heading"><?php _l('coming-soon')?></h2></header>
+        <?php $upcoming = array_filter($library->getTracks('coming-soon', '', 0, 6), $visibleTrack); ?>
+        <?php if ($upcoming):?>
+            <div class="bc-cards">
+                <?php foreach ($upcoming as $track): $artist = $modelUser->getUser($track['userid']); ?>
+                    <a href="<?php echo $e($library->trackUrl($track))?>">
+                        <span class="bc-cover"><img loading="lazy" alt="" src="<?php echo $e($library->getArt($track, 600))?>"></span>
+                        <strong><?php echo $e($track['title'])?></strong>
+                        <small><?php echo $e($artist['full_name'])?> · <time datetime="<?php echo $e($track['track_release'])?>"><?php echo $e($track['track_release'])?></time></small>
+                    </a>
+                <?php endforeach?>
+            </div>
+        <?php else:?>
+            <p class="bc-upcoming-empty"><?php _l('upcoming-releases-empty')?></p>
+        <?php endif?>
+    </section>
+    <section id="bc-charts" class="bc-wrap bc-shelf">
+        <header><h2><?php _l('top-songs')?></h2><a href="<?php echo url('charts/top')?>"><?php _l('see-all')?> ↗</a></header>
+        <div class="row bc-chart-columns">
             <div class="col-md-7">
-                <ul class="nav nav-tabs" style="border-color: #fff;">
-                    <li class="nav-item">
-                        <a class="nav-link " href="#" style="font-size: 20px;font-weight: bold;position:relative;bottom:4px"><?php _l('top-songs')?></a>
-                    </li>
+                <ul class="nav nav-tabs bc-periods" role="tablist">
                     <li class="nav-item">
                         <a class="nav-link active" data-toggle="tab" href="#thisweek" role="tab" ><?php _l('this-week')?></a>
                     </li>
@@ -105,116 +156,74 @@
                 </div>
             </div>
             <div class="col-md-5">
-                <a class="nav-link " href="#" style="font-size: 20px;font-weight: bold;position:relative;left: 5px;"><?php _l('new-albums')?></a>
-
-
-                <?php $type='album';$typeId='discover'; $playlists = $C->model('track')->listPlaylists($type, $typeId, 6)?>
-
-
-                <div
-                        data-paginate-url="playlist/paginate"
-                        data-offset="0"
-                        data-param="<?php echo perfectSerialize(array('type' => $type, 'typeId' => $typeId, 'limit' => 20))?>"
-                        class="playlists-container grid-container clearfix home-album-container"
-                        id="playlists-<?php echo $type?>-<?php echo $typeId?>">
-
-
-
-                    <?php foreach($playlists as $playlist):?>
-                        <?php
-                        $allowOwner = false;
-                        if (preg_match('#profile-#', $typeId)) $allowOwner = true;
-                        $canDisplay = model('track')->displayItem($playlist, $allowOwner);
-                        ?>
-                        <?php if($canDisplay):?>
-                            <?php echo $C->view('playlist/display', array('playlist' => $playlist, 'noTrackCount' => true))?>
-                        <?php endif?>
-                    <?php endforeach;?>
-
-                </div>
+                <?php
+                $type = 'album';
+                $typeId = 'discover';
+                $playlists = $library->listPlaylists($type, $typeId, 6);
+                foreach ($playlists as $album):
+                    if (!$library->displayItem($album) || !$library->canViewPrivateAlbum($album)) continue;
+                    $albumTrack = $library->getPlaylistFirstTrack($album['id']);
+                    if (!$albumTrack) continue;
+                    $albumArtist = $modelUser->getUser($album['userid']);
+                ?>
+                    <a class="bc-album" href="<?php echo $e($library->playlistUrl($album))?>">
+                        <img loading="lazy" alt="" src="<?php echo $e($library->getPlaylistArt($album, $albumArtist, $albumTrack, 200))?>">
+                        <span><small><?php _l('new-albums')?></small><strong><?php echo $e($album['name'])?></strong><?php echo $e($albumArtist['full_name'])?></span>
+                        <span class="bc-album-arrow" aria-hidden="true">↗</span>
+                    </a>
+                <?php break; endforeach?>
+                <nav class="bc-directory" aria-label="<?php _l('discover')?>">
+                    <?php
+                    $links = array(
+                        'new-hot'=>array('charts','line-chart'), 'top-50'=>array('charts/top','bar-chart'),
+                        'latest-tracks'=>array('discover/latest','clock-o'), 'albums'=>array('discover/albums','book'),
+                        'artists'=>array('discover/artists','microphone'), 'playlists'=>array('discover/playlists','list')
+                    );
+                    if (moduleExists('store')) $links['store'] = array('store','shopping-cart');
+                    if (moduleExists('video')) $links['videos'] = array('videos','video-camera');
+                    foreach ($links as $label => list($destination, $icon)):?>
+                        <a href="<?php echo url($destination)?>"><i class="la la-<?php echo $icon?>" aria-hidden="true"></i><?php _l($label)?></a>
+                    <?php endforeach?>
+                </nav>
             </div>
         </div>
-    </div>
-    <div class="bg-section">
-        <div class="inner-container">
-            <div class="row">
-                <div class="col-md-7">
-                    <div class="section" >
-                        <div class="section-title align-left-to-center" style="" data-animation="fadeInDown" data-animation-delay="400">
-                            <h2><?php _l('get-connected-with-great-artists')?></h2>
-                            <span class="note"><?php _l('get-connected-with-great-artists-note')?></span>
-                            <div class="mt-5">
-                                <a  href="<?php echo url('discover/artists')?>" class="btn btn-primary  pr-5 pl-5"><?php _l('meet-great-artists')?></a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-5">
-                    <div class="home-artists-container clearfix" data-animation="fadeInDown" data-animation-delay="400">
-                        <?php foreach(model('user')->getRandomArtists(14) as $user):?>
-
-                            <a href="<?php echo model('user')->profileUrl($user)?>" style="background-image: url(<?php echo model('user')->getAvatar($user)?>);"></a>
-                        <?php endforeach;?>
-                    </div>
-                </div>
-            </div>
+    </section>
+    <?php if ($playlists):?>
+    <section id="bc-new-albums" class="bc-wrap bc-shelf bc-album-shelf">
+        <header><h2><?php _l('new-albums')?></h2><a href="<?php echo url('discover/albums')?>"><?php _l('see-all')?> ↗</a></header>
+        <div class="grid-container bc-album-grid">
+            <?php foreach ($playlists as $playlist):?>
+                <?php if ($library->canViewPrivateAlbum($playlist) && $library->displayItem($playlist)):?>
+                    <?php echo $C->view('playlist/display', array('playlist'=>$playlist, 'noTrackCount'=>true, 'albumShelf'=>true))?>
+                <?php endif?>
+            <?php endforeach?>
         </div>
-    </div>
-
-    <div class="inner-container">
-        <div class="row">
-            <div class="col-md-7">
-                <div class="section">
-                    <div class="section-title" data-animation="fadeInDown" data-animation-delay="400">
-                        <div class="content">
-                            <div class="row">
-                                <div class="col-sm-6">
-                                    <div class="hero-box" data-animation="fadeInDown" data-animation-delay="400">
-                                        <i class="la la-cloud-upload colored"></i>
-                                        <h6 class="title"><?php _l('upload')?></h6>
-                                    </div>
-                                </div>
-
-                                <div class="col-sm-6">
-                                    <div class="hero-box" data-animation="fadeInDown" data-animation-delay="400">
-                                        <i class="la la-users colored"></i>
-                                        <h6 class="title"><?php _l('access-to-fans')?></h6>
-                                    </div>
-                                </div>
-
-
-                                <div class="col-sm-6">
-                                    <div class="hero-box" data-animation="fadeInDown" data-animation-delay="400">
-                                        <i class="la la-bar-chart colored"></i>
-                                        <h6 class="title"><?php _l('know-more-about-music')?></h6>
-                                    </div>
-                                </div>
-                                <?php if(moduleExists('store')):?>
-                                    <div class="col-sm-6">
-                                        <div class="hero-box" data-animation="fadeInDown" data-animation-delay="400">
-                                            <i class="la la-money colored"></i>
-                                            <h6 class="title"><?php _l('sell-your-tracks')?></h6>
-                                        </div>
-                                    </div>
-
-                                <?php endif?>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-5">
-                <div class="section">
-                    <div class="section-title align-right-to-center" style=" margin-top: 150px;" data-animation="fadeInDown" data-animation-delay="400">
-                        <h2><?php _l('calling-all-creators')?></h2>
-                        <span class="note"><?php _l('calling-all-creators-note')?> <span class="colored"><?php echo config('site-title')?></span></span>
-
-                    </div>
-                </div>
-            </div>
-
+    </section>
+    <?php endif?>
+    <?php $genres = $C->model('admin')->getGenres(); if ($genres):?>
+    <section class="bc-wrap bc-shelf">
+        <header><h2><?php _l('genres')?></h2></header>
+        <nav class="bc-genres" aria-label="<?php _l('genres')?>">
+            <?php foreach ($genres as $genre):?>
+                <a href="<?php echo $e(url('discover/genre/'.$genre['id'].'-'.toAscii($genre['name'])))?>"><?php echo $e(l($genre['name']))?></a>
+            <?php endforeach?>
+        </nav>
+    </section>
+    <?php endif?>
+    <?php $artists = $modelUser->getLandingArtists(); if ($artists):?>
+    <section id="bc-artists" class="bc-wrap bc-shelf">
+        <header><h2><?php _l('artists')?></h2><a href="<?php echo url('discover/artists')?>"><?php _l('see-all')?> ↗</a></header>
+        <div class="bc-artists">
+            <?php foreach ($artists as $user):?>
+                <a href="<?php echo $e($modelUser->profileUrl($user))?>">
+                    <img class="artist-disc" loading="lazy" src="<?php echo $e($modelUser->getAvatar($user, 200))?>" alt="">
+                    <strong><?php echo $e($user['full_name'])?></strong>
+                    <small><?php echo (int)$user['album_count']?> <?php _l($user['album_count'] == 1 ? 'album' : 'albums')?></small>
+                </a>
+            <?php endforeach?>
         </div>
-    </div>
+    </section>
+    <?php endif?>
     <?php
     $android = config('android-app-download-link');
     $iphone = config('iphone-app-download-link');
@@ -250,32 +259,7 @@
             </div>
         </div>
     <?php endif?>
-    <?php if(config('enable-premium', false)):?>
-
-        <div class="bg-section-pricing">
-            <div class="img-container">
-                <div class="inner-container ">
-                    <img src="<?php echo assetUrl('assets/images/topo.png')?>"/>
-                </div>
-            </div>
-            <div class="cover">
-            </div>
-            <div class="inner-container">
-                <div class="section">
-                    <div class="section-title" data-animation="fadeInDown" data-animation-delay="400">
-                        <h2><?php _l('go-pro')?></h2>
-                        <span class="note" style="font-size: 20px;color: grey;font-weight: lighter;"><?php _l('go-pro-note')?></span>
-                        <div class="mt-5">
-                            <a data-animation="fadeInDown" data-animation-delay="400" href="<?php echo url('pro')?>" class="btn btn-primary ml-3 pr-5 pl-5"><?php _l('pricing')?></a>
-                        </div>
-                    </div>
-                </div>
-
-            </div>
-        </div>
-
-    <?php endif?>
-    <div class="inner-container">
+    <div class="bc-wrap">
         <div class="section footer-section">
             <div class="links">
                 <?php foreach($C->model('admin')->getPagesMenu('footer') as $page):?>

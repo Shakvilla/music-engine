@@ -330,7 +330,10 @@ class TrackModel extends Model {
             $time = get_time_relative_format($time);
             $currentTime = time();
 
-            $sql = "SELECT *,(SELECT count(track) FROM views WHERE views.track=tracks.id AND views.time BETWEEN $time AND $currentTime ) as count FROM tracks WHERE tracks.status=? AND userid NOT IN ($expiredArtists)  AND  userid NOT IN ($blockedIds)   AND (tracks.public != ? AND tracks.public != ?)  AND approved=?";
+            $sql = "SELECT tracks.*,album.id AS chart_album_id,album.name AS chart_album_name,(SELECT count(track) FROM views WHERE views.track=tracks.id AND views.time BETWEEN $time AND $currentTime ) as count FROM tracks LEFT JOIN playlist album ON album.id = (
+                SELECT MIN(p.id) FROM playlistentries e JOIN playlist p ON p.id=e.playlist
+                WHERE e.track=tracks.id AND p.userid=tracks.userid AND p.playlist_type=0 AND p.public=1
+            ) WHERE tracks.status=? AND tracks.userid NOT IN ($expiredArtists)  AND  tracks.userid NOT IN ($blockedIds)   AND (tracks.public != ? AND tracks.public != ?)  AND approved=?";
             $param = array(1, 3,2,1);
             if ($genre != 'all') {
                 $param[] = $genre;
@@ -340,6 +343,12 @@ class TrackModel extends Model {
         }elseif($type == 'genre') {
             $sql = "SELECT * FROM  tracks WHERE  userid NOT IN ($blockedIds)AND userid NOT IN ($expiredArtists)  AND status=? AND genre=? AND (public != ? AND public != ?)  AND approved=?  ORDER BY id DESC";
             $param = array(1, $typeId, 3,2,1);
+        }elseif($type === 'coming-soon') {
+            // Use the published release metadata. Scheduled/private uploads stay hidden.
+            $sql = "SELECT * FROM tracks WHERE userid NOT IN ($blockedIds) AND userid NOT IN ($expiredArtists)
+                    AND status=? AND public=? AND approved=? AND track_release > ?
+                    ORDER BY track_release ASC, id ASC";
+            $param = array(1, 1, 1, date('Y-m-d'));
         }elseif($type == 'latest') {
             $sql = "SELECT * FROM  tracks WHERE userid NOT IN ($blockedIds) AND userid NOT IN ($expiredArtists)  AND status=? AND (public != ? AND public != ?)  AND approved=?  ORDER BY id DESC";
             $param = array(1, 3,2,1);

