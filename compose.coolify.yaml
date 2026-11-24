@@ -1,0 +1,106 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      APP_BASE_URL: https://${SITE_DOMAIN:?Set SITE_DOMAIN in Coolify}/
+      APP_DEBUG: "false"
+      APP_HTTPS: "true"
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:?Set DB_NAME in Coolify}
+      DB_USERNAME: ${DB_USERNAME:?Set DB_USERNAME in Coolify}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in Coolify}
+      MUSICENGINE_LOCAL_LICENSE_BYPASS: "0"
+    expose:
+      - "80"
+    volumes:
+      - musicengine-private:/var/www/html/musicengine-private
+      - musicengine-uploads:/var/www/html/Script/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@fsockopen('127.0.0.1', 80) ? 0 : 1);"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - edge
+      - private
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  charts:
+    build: .
+    command: ["/bin/sh", "-c", "while true; do php app/cli/charts.php || exit 1; sleep 300; done"]
+    restart: unless-stopped
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:?Set DB_NAME in Coolify}
+      DB_USERNAME: ${DB_USERNAME:?Set DB_USERNAME in Coolify}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in Coolify}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [private]
+
+  archives:
+    build: .
+    command: ["/bin/sh", "-c", "while true; do php -d memory_limit=128M app/cli/archive.php || exit 1; sleep 5; done"]
+    user: www-data
+    restart: unless-stopped
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:?Set DB_NAME in Coolify}
+      DB_USERNAME: ${DB_USERNAME:?Set DB_USERNAME in Coolify}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in Coolify}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - musicengine-private:/var/www/html/musicengine-private
+      - musicengine-uploads:/var/www/html/Script/uploads
+    networks: [private, edge]
+
+  db:
+    build:
+      context: ./MYSQL
+      dockerfile: Dockerfile.coolify
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_NAME:?Set DB_NAME in Coolify}
+      MYSQL_USER: ${DB_USERNAME:?Set DB_USERNAME in Coolify}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in Coolify}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD in Coolify}
+    volumes:
+      - musicengine-db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - private
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+
+volumes:
+  musicengine-private:
+  musicengine-db:
+  musicengine-uploads:
+
+networks:
+  edge:
+  private:
+    internal: true

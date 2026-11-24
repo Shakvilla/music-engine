@@ -1,0 +1,6 @@
+FROM mysql:8.4
+COPY MusicEngine.sql /tmp/musicengine-install.sql
+# Keep the installation schema and genre list. Exclude the demo administrator.
+RUN sed '/^INSERT INTO `users` /,/;$/d' /tmp/musicengine-install.sql > /docker-entrypoint-initdb.d/001-install.sql \
+    && ! grep -Ei '^INSERT INTO ' /docker-entrypoint-initdb.d/001-install.sql | grep -vi '^INSERT INTO `genre` ' \
+    && rm /tmp/musicengine-install.sql
