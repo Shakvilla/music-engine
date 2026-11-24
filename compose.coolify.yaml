@@ -61,6 +61,7 @@ services:
       DB_NAME: ${DB_NAME:?Set DB_NAME in Coolify}
       DB_USERNAME: ${DB_USERNAME:?Set DB_USERNAME in Coolify}
       DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in Coolify}
+      MUSICENGINE_LOCAL_LICENSE_BYPASS: "1"
     depends_on:
       db:
         condition: service_healthy
