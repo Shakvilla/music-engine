@@ -59,7 +59,16 @@ class TrackController extends Controller {
                 $val['wave'] = $wave;
                 $val['waveColored'] = $waveColored;
             }
+            if (config('enable-ftp',false)) { http_response_code(503); return 'Private audio storage required'; }
             $tmpMove = $this->uploadFile($tmpMove);
+            if (str_starts_with($tmpMove,'uploads/')) {
+                $private = 'private-audio/'.bin2hex(random_bytes(24)).'.'.strtolower(get_file_extension($tmpMove));
+                $dir = dirname(path($private));
+                if ((!is_dir($dir) && !mkdir($dir,0700,true) && !is_dir($dir)) || !rename(path($tmpMove),path($private))) {
+                    http_response_code(503); return 'Private audio storage unavailable';
+                }
+                $tmpMove = $private;
+            }
             Database::getInstance()->query("INSERT INTO tmp_files (path,time)VALUES(?,?)", $tmpMove, time()); //add the files do later delete
             $val['audio'] = $tmpMove;
         } else {
@@ -189,7 +198,7 @@ class TrackController extends Controller {
     }
 
     public function playlistPaginate() {
-        $data = perfectUnserialize($this->request->input('data'));
+        $data = readPaginationState($this->request->input('data'), ['type', 'typeId']);
         $type = $data['type'];
         $typeId = $data['typeId'];
         $offset = $this->request->input('offset');
@@ -400,7 +409,7 @@ class TrackController extends Controller {
     }
 
     public function paginatePeople() {
-        $data = perfectUnserialize($this->request->input('data'));
+        $data = ($this->request->input('data') ? readPaginationState($this->request->input('data'), []) : []);
         $type = $this->request->input('type');
         $pageId = $this->request->input('pageId');
         $pageType = $this->request->input('page');
@@ -513,7 +522,7 @@ class TrackController extends Controller {
     }
 
     public function paginateComment() {
-        $data = perfectUnserialize($this->request->input('data'));
+        $data = readPaginationState($this->request->input('data'), ['type', 'typeId']);
         $type = $data['type'];
         $typeId = $data['typeId'];
         $offset = $this->request->input('offset');
@@ -657,39 +666,36 @@ class TrackController extends Controller {
     }
 
     public function downloadAlbum() {
-        $zip = new ZipArchive();
-        if (!config('enable-zip-download-album', false)) exit('NOT ALLOWED');
-        $playlistId = $this->request->input('id');
-        $playlist = $this->model('track')->findPlaylist($playlistId);
-        $tracks = model('track')->getPlaylistTracks($playlistId, 0);
-        $base = 'uploads/tmp/zips/';
-        if (!is_dir(path($base))) {
-            mkdir(path($base), 0777,true);
+        if (!config('enable-zip-download-album', false)) { http_response_code(403); return; }
+        $media = $this->model('media');
+        $archive = $media->archive($this->request->input('id'));
+        if (!$archive) { http_response_code(403); exit; }
+        if ($archive['state'] === 'ready' && is_file($archive['path'])) $media->deliver($archive['path'],true,'album');
+        if ($archive['state'] === 'failed') { http_response_code(503); return 'Album archive unavailable'; }
+        http_response_code(202);
+        header('Retry-After: 5');
+        header('Refresh: 5');
+        return 'Preparing your album download.';
+    }
+
+    public function media() {
+        $token = $this->request->segment(2);
+        $ticket = $this->db->query('SELECT * FROM media_tickets WHERE digest=UNHEX(?) AND expires>?',hash('sha256',$token),time())->fetch(PDO::FETCH_ASSOC);
+        if (!$ticket) { http_response_code(403); exit; }
+        $viewer = $this->model('user');
+        $viewer->authId = null;
+        $viewer->authUser = null;
+        if ($ticket['userid']) {
+            $user = $viewer->getUser($ticket['userid'],false);
+            if (!$user || $user['banned']) { http_response_code(403); exit; }
+            $viewer->authId = $user['id'];
+            $viewer->authUser = $user;
         }
-        $archive_file_name = path($base.toAscii($playlist['name']).count($tracks).'.zip');
-        if (!file_exists($archive_file_name)) {
-            if ($zip->open($archive_file_name, ZIPARCHIVE::CREATE )!==TRUE) {
-                exit("cannot open <$archive_file_name>\n");
-            }
-            foreach($tracks as $track) {
-                if ($this->model('track')->canDownload($track)) {
-                    $file = $this->getFileUri($track['track_file'], false);
-                    if (preg_match('#http#', $file)) {
-                        $zip->addFromString(toAscii($track['title']).'.mp3', file_get_contents($file));
-                    } else {
-                        $zip->addFile(path($file), toAscii($track['title']).'.mp3');
-                    }
-                }
-            }
-            $zip->close();
-        }
-        $fileName = $playlist['name'].'.zip';
-        header("Content-type: application/zip");
-        header("Content-Disposition: attachment; filename=$fileName");
-        header("Content-length: " . filesize($archive_file_name));
-        header("Pragma: no-cache");
-        header("Expires: 0");
-        readfile("$archive_file_name");
+        $track = $this->model('track')->findTrack($ticket['track']);
+        $media = $this->model('media');
+        $file = $media->source($track,$ticket['purpose']);
+        if (!$file) { http_response_code(403); exit; }
+        $media->deliver($file,$ticket['purpose'] === 'download',$track['title']);
     }
 
     public function trackAsTags() {
@@ -698,26 +704,11 @@ class TrackController extends Controller {
     }
 
     public function play() {
-        $trackId = $this->request->segment(2);
-        $hash = $this->request->segment(3);
-
-        if (!session_get($hash)) return 'FORBIDDEN';
-
-        $sessionValue = session_get($hash);
-        if ($sessionValue != 'set') {
-            if (!isset($_SERVER['HTTP_RANGE'])) {
-                return 'FORBIDDEN';
-            }
-        }
-
-        $track = $this->model('track')->findTrack($trackId, false);
-        //$file = $this->model('track')->getTrackFile($track);
-        $track = Hook::getInstance()->fire("play.now", $track);
-        $file = $track['track_file'];
-        $filename = $track['track_file'];
-        session_put($hash, 'used');
-        smartReadFile(path($file), $filename, getMimeType($filename));
-
+        $track = $this->model('track')->findTrack($this->request->segment(2));
+        $media = $this->model('media');
+        $file = $media->source($track,'play');
+        if (!$file) { http_response_code(403); exit; }
+        $media->deliver($file,false,$track['title']);
     }
 
     public function trackDetail() {
@@ -736,14 +727,10 @@ class TrackController extends Controller {
     }
 
     public  function _getTrackDetail($trackId) {
-        $track = $this->model('track')->findTrack($trackId, false);
-        $ids = md5(uniqueKey(20, 50).session_id().time());
-        //if (!is_ajax()) exit('FORBIDDEN');
-        session_put($ids, 'set');
-        $url = url('track/play/'.$track['id'].'/'.$ids);
-        $file = config('enable-chunk-play', false) ? $this->getFileUri($track['track_file'], false) : $this->getFileUri($track['track_file']);
-        if (preg_match('#http#', $file)) $url = $file;
-
+        $track = $this->model('track')->findTrack($trackId);
+        if (!$track) return [];
+        $media = $this->model('media');
+        $url = $media->source($track,'play') ? $media->ticket($track,'play') : '';
         $user = $this->model('user')->getUser($track['userid']);
         $result = array(
             'link' => $this->model('track')->trackUrl($track),
@@ -786,28 +773,9 @@ class TrackController extends Controller {
         $track = $this->model('track')->findTrack($key);
 
         if (!$track) return $this->request->redirect(url());
-        //if ($track['downloads'])
-        $file = $this->getFileUri($track['track_file'], false);
-
-        //$file = Hook::getInstance()->fire('track.download.file', $file, array($track));
-        //if (!$this->model('track')->canDownload($track)) exit('No Permission');
-        //$file = assetUrl($file);
-        if (preg_match('#http#', $file)) {
-            //we need to download first to a local place and delete when done
-            $ext = getMimeTypeExtension(getMimeType($file));
-            $ext = ($ext) ? $ext : 'mp3';
-            $filename = format_output_text($track['title']).'.'.$ext;
-            ob_start();
-            header('Pragma: public');
-            header('Cache-Control: public, no-cache');
-            header('Content-Type: application/octet-stream');
-            header("Content-Transfer-Encoding: Binary");
-            header("Content-disposition: attachment; filename=\"" . $filename . "\"");
-            ob_clean(); flush();
-            readfile($file); // do the double-download-dance (dirty but worky)
-        } else{
-
-            return download_file(path($file), format_output_text($track['title']));
-        }
+        $media = $this->model('media');
+        $file = $media->source($track,'download');
+        if (!$file) { http_response_code(403); exit; }
+        $media->deliver($file,true,$track['title']);
     }
 }

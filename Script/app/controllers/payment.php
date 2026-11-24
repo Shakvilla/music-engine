@@ -10,7 +10,7 @@ class PaymentController extends Controller {
     public function load() {
         $type = $this->request->input('type');
         $typeId = $this->request->input('typeid');
-        $price = formatMoneyTotal($this->request->input('price'));
+        $price = $this->model('order')->create($type, $typeId);
 
         session_put("about-pay-type", $type);
         session_put('about-pay-typeid', $typeId);
@@ -28,7 +28,8 @@ class PaymentController extends Controller {
     public function stripe() {
         $type = $this->request->input('type');
         $typeId = $this->request->input('typeid');
-        $price = $this->request->input('price');
+        $order = $this->model('order')->current($type, $typeId, 'stripe');
+        $price = $order['amount'];
         $token = $this->request->input('token');
 
         $stripe = \Omnipay\Omnipay::create('Stripe');
@@ -36,180 +37,87 @@ class PaymentController extends Controller {
             'apiKey' => config('stripe-secret-key', '')
         ));
 
-        if (session_get('about-pay-price') != $price) return json_encode(array(
-            'status' => 0,
-            'message' => l('transaction-failed')
-        ));
+
 
         $url = ($type == 'pro' or $type == 'pro-users') ? url('settings/pro') : url();
         $url = Hook::getInstance()->fire('payment.success.url', $url, array($type, $typeId));
-        $currency = model('user')->getUserCurrency();
-        if (!userCurrencySupportStripe()) {
-            $currency = config('currency-converter-source', 'USD');;
-        }
-        try{
-           if (($type == 'pro' or $type == 'pro-users') and config('enable-stripe-recurring', false)) {
-               $user = $this->model('user')->getUser();
-                $response = $stripe->createCustomer(array(
-                    'token' => $token,
-                    'description' => 'Customer for ' .$user['email'],
-                    'email' => $user['email'],
-                    'name' => $user['full_name'],
-                    'address' => $user['country'],
-                ))->send();
-                if ($response->isSuccessful()) {
-                    $customerId = $response->getCustomerReference();
-                    $response = $stripe->createSubscription(array(
-                        'customerReference' => $customerId,
-                        'plan' => ($typeId == 'monthly') ? config('stripe-product-monthly-plan') : config('stripe-product-yearly-plan'),
-                        'items' => array(
-                            array(
-                                'plan' => ($typeId == 'monthly') ? config('stripe-product-monthly-plan') : config('stripe-product-yearly-plan')
-                            )
-                        ),
-                    ))->send();
-                    if ($response->isSuccessful()) {
-                        $subscriptionId = $response->getSubscriptionReference();
-                        $response = $stripe->purchase([
-                            'amount' => $price,
-                            'currency' => $currency,
-                            'customerReference' => $customerId,
-
-                        ])->send();
-                        if ($response->isSuccessful()) {
-                            Database::getInstance()->query("UPDATE users SET stripe_customer_id=?,stripe_subscription_id=? WHERE id=?", $customerId,$subscriptionId, $user['id']);
-                            $this->model('admin')->addTransaction(array(
-                                'amount' => (userCurrencySupportStripe()) ? convertBackToBase($price) : $price,
-                                'type' => $type,
-                                'type_id' => $typeId,
-                                'sale_id' => $customerId,
-                                'name' => $this->model('user')->authUser['full_name'],
-                                'country' => $this->model('user')->authUser['country'],
-                                'email' => $this->model('user')->authUser['email'],
-                                'userid' => $this->model('user')->authId
-                            ));
-                            Hook::getInstance()->fire('payment.success', null, array($type, $typeId));
-                            if (session_get('mobile-pay') == 1) return json_encode(array(
-                                'status' => 1,
-                                'url' => url('api/pay/success'),
-                                'message' => l('transaction-successful')
-                            ));
-                            return json_encode(array(
-                                'status' => 1,
-                                'url' => $url,
-                                'message' => l('transaction-successful')
-                            ));
-                        } else {
-                            if (session_get('mobile-pay') == 1) return json_encode(array(
-                                'status' => 1,
-                                'url' => url('api/pay/failed'),
-                                'message' => l('transaction-failed')
-                            ));
-                            return json_encode(array(
-                                'status' => 0,
-                                'message' => l('transaction-failed').$response->getMessage()
-                            ));
-                        }
-
-                    } else {
-                        if (session_get('mobile-pay') == 1) return json_encode(array(
-                            'status' => 1,
-                            'url' => url('api/pay/failed'),
-                            'message' => l('transaction-failed')
-                        ));
-                        return json_encode(array(
-                            'status' => 0,
-                            'message' => l('transaction-failed').$response->getMessage()
-                        ));
-                    }
-
-                } else {
-                    if (session_get('mobile-pay') == 1) return json_encode(array(
-                        'status' => 1,
-                        'url' => url('api/pay/failed'),
-                        'message' => l('transaction-failed')
-                    ));
-                    return json_encode(array(
-                        'status' => 0,
-                        'message' => l('transaction-failed').$response->getMessage()
-                    ));
-                }
-
-           } else {
-               $response = $stripe->purchase([
-                   'amount' => number_format($price, 2),
-                   'currency' => $currency,
-                   'token' => $token,
-
-               ])->send();
-
-               if ($response->isSuccessful()) {
-                   $saleId = $response->getTransactionReference();
-
-                   $this->model('admin')->addTransaction(array(
-                       'amount' => (userCurrencySupportStripe()) ? convertBackToBase($price) : $price,
-                       'type' => $type,
-                       'type_id' => $typeId,
-                       'sale_id' => $saleId,
-                       'name' => $this->model('user')->authUser['full_name'],
-                       'country' => $this->model('user')->authUser['country'],
-                       'email' => $this->model('user')->authUser['email'],
-                       'userid' => $this->model('user')->authId
-                   ));
-                   Hook::getInstance()->fire('payment.success', null, array($type, $typeId));
-                   if (session_get('mobile-pay') == 1) return json_encode(array(
-                       'status' => 1,
-                       'url' => url('api/pay/success'),
-                       'message' => l('transaction-successful')
-                   ));
-                   return json_encode(array(
-                       'status' => 1,
-                       'url' => $url,
-                       'message' => l('transaction-successful')
-                   ));
-               } else {
-                   if (session_get('mobile-pay') == 1) return json_encode(array(
-                       'status' => 1,
-                       'url' => url('api/pay/failed'),
-                       'message' => l('transaction-failed')
-                   ));
-                   return json_encode(array(
-                       'status' => 0,
-                       'message' => l('transaction-failed')
-                   ));
-               }
-           }
-        } catch(Exception $exception) {
-            if (session_get('mobile-pay') == 1) return json_encode(array(
-                'status' => 1,
-                'url' => url('api/pay/failed'),
-                'message' => l('transaction-failed')
-            ));
-            return json_encode(array(
-                'status' => 0,
-                'message' => l('transaction-failed').$exception->getMessage()
-            ));
+        $currency = $order['currency'];
+        try {
+            $params = ['amount'=>$price,'currency'=>$currency,'token'=>$token,'idempotencyKey'=>$order['id']];
+            $charge = $stripe->purchase($params);
+            $expectedMinor = $charge->getAmountInteger();
+            if (in_array($type,['pro','pro-users'],true) && config('enable-stripe-recurring',false)) {
+                $user = $this->model('user')->authUser;
+                $customer = $stripe->createCustomer([
+                    'token'=>$token,'email'=>$user['email'],'idempotencyKey'=>$order['id'].'-customer'
+                ])->send();
+                if (!$customer->isSuccessful()) throw new RuntimeException('Customer creation failed');
+                $customerId = $customer->getCustomerReference();
+                $plan = config($typeId === 'monthly' ? 'stripe-product-monthly-plan' : 'stripe-product-yearly-plan');
+                $subscription = $stripe->createSubscription([
+                    'customerReference'=>$customerId,'items'=>[['plan'=>$plan]],'idempotencyKey'=>$order['id'].'-subscription'
+                ])->send();
+                if (!$subscription->isSuccessful()) throw new RuntimeException('Subscription creation failed');
+                $invoiceId = $subscription->getData()['latest_invoice'] ?? null;
+                if (!$invoiceId) throw new RuntimeException('Invoice missing');
+                $invoice = $stripe->fetchInvoice(['invoiceReference'=>$invoiceId])->send()->getData();
+                if (empty($invoice['paid']) || ($invoice['customer'] ?? '') !== $customerId) throw new RuntimeException('Invoice unpaid');
+                $reference = $invoice['id'];
+                $minor = $invoice['amount_paid'] ?? null;
+                $receivedCurrency = $invoice['currency'] ?? '';
+            } else {
+                $response = $charge->send();
+                $receipt = $response->getData();
+                if (!$response->isSuccessful() || empty($receipt['paid']) || empty($receipt['captured'])) throw new RuntimeException('Charge incomplete');
+                $reference = $response->getTransactionReference();
+                $minor = $receipt['amount_captured'] ?? null;
+                $receivedCurrency = $receipt['currency'] ?? '';
+            }
+            if (!is_numeric($minor) || (int)$minor !== (int)$expectedMinor || strcasecmp($currency,$receivedCurrency)!==0) throw new RuntimeException('Receipt mismatch');
+            $this->model('order')->fulfill($order,'stripe',$reference,$price,$receivedCurrency);
+            if (isset($subscription)) {
+                $this->db->query('UPDATE users SET stripe_customer_id=?,stripe_subscription_id=? WHERE id=?',
+                    $customerId,$subscription->getSubscriptionReference(),$order['userid']);
+            }
+            return json_encode(['status'=>1,'url'=>session_get('mobile-pay') ? url('api/pay/success') : $url,'message'=>l('transaction-successful')]);
+        } catch (Exception $exception) {
+            return json_encode(['status'=>0,'message'=>l('transaction-failed')]);
         }
     }
 
     public function stripeHook() {
-        $input = @file_get_contents('php://input');
-        $event_json = json_decode($input);
-
-        $dataobj = $event_json['data']['object'];
-        $event_type = $event_json['type'];
-        if($event_type == "invoice.payment_succeeded") {
-            $customerId = $dataobj['customer'];
-            $user = Database::getInstance()->query("SELECT * FROM users WHERE stripe_customer_id=?", $customerId);
-            $user = $user->fetch(PDO::FETCH_ASSOC);
-            if ($user) {
-               $type = ($user['user_type'] == 2) ? 'pro' : 'pro-users';
-               $lastTransaction = $this->model('admin')->getLastTransaction($user['id'], $type);
-               $validTime = ($lastTransaction['type_id'] == 'monthly') ? time() + (2629746 * 1):time() + (2629746 * 12) ;
-               Database::getInstance()->query("UPDATE transactions SET valid_time=? WHERE id=?", $validTime, $lastTransaction['id']);
-            }
+        $raw = file_get_contents('php://input');
+        $secret = getenv('STRIPE_WEBHOOK_SECRET');
+        $signatures = [];
+        foreach (explode(',', $_SERVER['HTTP_STRIPE_SIGNATURE'] ?? '') as $field) {
+            $part = explode('=', trim($field), 2);
+            if (count($part) === 2) $signatures[$part[0]][] = $part[1];
         }
-        http_response_code(200);
+        $timestamp = $signatures['t'][0] ?? '';
+        $valid = false;
+        if ($secret && ctype_digit($timestamp) && abs(time() - (int)$timestamp) <= 300) {
+            $expected = hash_hmac('sha256', $timestamp.'.'.$raw, $secret);
+            foreach ($signatures['v1'] ?? [] as $signature) $valid = hash_equals($expected, $signature) || $valid;
+        }
+        if (!$valid) { http_response_code(400); return; }
+        $event = json_decode($raw,true);
+        if (empty($event['id']) || empty($event['type'])) { http_response_code(400); return; }
+        if ($event['type'] !== 'invoice.payment_succeeded') return;
+        $invoice = $event['data']['object'] ?? [];
+        $subscription = $invoice['subscription'] ?? $invoice['parent']['subscription_details']['subscription'] ?? '';
+        if (!$subscription || empty($invoice['customer']) || empty($invoice['paid'])) return;
+        $this->db->query('START TRANSACTION');
+        try {
+            $fresh = $this->db->query('INSERT IGNORE INTO stripe_events (id) VALUES(?)', $event['id'])->rowCount();
+            if ($fresh) {
+                $user = $this->db->query("SELECT id,user_type FROM users WHERE stripe_customer_id=? AND stripe_subscription_id=?", $invoice['customer'],$subscription)->fetch(PDO::FETCH_ASSOC);
+                if ($user && !empty($invoice['lines']['data'][0]['period']['end'])) {
+                    $last = $this->model('admin')->getLastTransaction($user['id'], $user['user_type']==2 ? 'pro' : 'pro-users');
+                    if ($last) $this->db->query('UPDATE transactions SET valid_time=GREATEST(CAST(valid_time AS UNSIGNED),?) WHERE id=?', (int)$invoice['lines']['data'][0]['period']['end'],$last['id']);
+                }
+            }
+            $this->db->query('COMMIT');
+        } catch (Throwable $e) { $this->db->query('ROLLBACK'); throw $e; }
     }
 
     public function stripeCancel() {
@@ -247,9 +155,9 @@ class PaymentController extends Controller {
     public function initPaypal() {
         $type = $this->request->input('type');
         $typeId = $this->request->input('typeid');
-        $price = $this->request->input('price');
+        $order = $this->model('order')->current($type, $typeId, 'paypal');
+        $price = $order['amount'];
 
-        if (session_get('about-pay-price') != $price) $price = session_get('about-pay-price');
         try{
             $gateway = \Omnipay\Omnipay::create('PayPal_Express');
 
@@ -266,11 +174,7 @@ class PaymentController extends Controller {
 
         $gateway->setbrandName(config('site-title'));
 
-        $currency  = model('user')->getUserCurrency();
-        if (!userCurrencySupportPaypal()) {
-            $price = convertBackToBase($price);
-            $currency = config('currency-converter-source', 'USD');
-        }
+        $currency = $order['currency'];
 
 
         $request_data = [
@@ -284,6 +188,7 @@ class PaymentController extends Controller {
         try {
             $response = $gateway->purchase($request_data)->send();
             if ($response->isRedirect()) {
+                $this->db->query("UPDATE checkout_orders SET reference_id=? WHERE id=?", $response->getTransactionReference(), $order['id']);
                 $response->redirect();
             } else {
                 exit($response->getMessage());
@@ -304,16 +209,15 @@ class PaymentController extends Controller {
 
         $type = $this->request->input('type');
         $typeId = $this->request->input('typeid');
-        $price = $this->request->input('price');
+        $order = $this->model('order')->current($type, $typeId, 'paypal');
+        $price = $order['amount'];
 
         $url = ($type == 'pro' or $type == 'pro-users') ? url('settings/pro') : url();
         $url = Hook::getInstance()->fire('payment.success.url', $url, array($type, $typeId));
 
-        $currency  = model('user')->getUserCurrency();
-        if (!userCurrencySupportPaypal()) {
-            $currency = config('currency-converter-source', 'USD');
-        }
+        $currency = $order['currency'];
 
+        if (!$order['reference_id'] || $order['reference_id'] !== $this->request->input('token')) { http_response_code(409); exit; }
         $response = $gateway->completePurchase([
             'transactionReference' => $this->request->input('token'),
             'payerId'              => $this->request->input('PayerID'),
@@ -329,17 +233,7 @@ class PaymentController extends Controller {
         } elseif (isset($paypalResponse['PAYMENTINFO_0_ACK']) && $paypalResponse['PAYMENTINFO_0_ACK'] === 'Success') {
             $saleId = $response->getTransactionReference();
 
-            $this->model('admin')->addTransaction(array(
-                'amount' => (!userCurrencySupportPaypal()) ? $price : convertBackToBase($price),
-                'type' => $type,
-                'type_id' => $typeId,
-                'sale_id' => $saleId,
-                'name' => $this->model('user')->authUser['full_name'],
-                'country' => $this->model('user')->authUser['country'],
-                'email' => $this->model('user')->authUser['email'],
-                'userid' => $this->model('user')->authId
-            ));
-            Hook::getInstance()->fire('payment.success', null, array($type, $typeId));
+            $this->model('order')->fulfill($order, 'paypal', $saleId, $paypalResponse['PAYMENTINFO_0_AMT'] ?? null, $paypalResponse['PAYMENTINFO_0_CURRENCYCODE'] ?? '');
             if (session_get('mobile-pay') == 1) $this->request->redirect(url('api/pay/success'));
             $this->request->redirect($url);
         }
@@ -348,9 +242,9 @@ class PaymentController extends Controller {
     public function initMollie() {
         $type = $this->request->input('type');
         $typeId = $this->request->input('typeid');
-        $price = $this->request->input('price');
+        $order = $this->model('order')->current($type, $typeId, 'mollie');
+        $price = $order['amount'];
 
-        if (session_get('about-pay-price') != $price) $price = session_get('about-pay-price');
         $gateway = \Omnipay\Omnipay::create('Mollie');
 
         $gateway->setApiKey(config('mollie-api-key'));
@@ -359,11 +253,7 @@ class PaymentController extends Controller {
         $description = $details['desc'];
         $returnUrl = url('payment/mollie/verify', array('type' => $type, 'typeid' => $typeId, 'price' => $price));
         $webhookUrl = url('payment/mollie/hook');
-        $currency  = model('user')->getUserCurrency();
-        if (!userCurrencySupportMollie()) {
-            $price = convertBackToBase($price);
-            $currency = config('currency-converter-source', 'USD');
-        }
+        $currency = $order['currency'];
         $oResponse = $gateway->purchase([
             'amount'      => number_format($price, 2, '.', ''),
             'description' => $description,
@@ -374,7 +264,7 @@ class PaymentController extends Controller {
 
         // Add the token to database
         $token = $oResponse->getTransactionReference();
-        session_put('mollie-transaction-id', $token);
+        $this->db->query('UPDATE checkout_orders SET reference_id=? WHERE id=?', $token,$order['id']);
 
         if ($oResponse->isRedirect()) {
             $oResponse->redirect();
@@ -389,12 +279,12 @@ class PaymentController extends Controller {
     public function verifyMollie() {
         $type = $this->request->input('type');
         $typeId = $this->request->input('typeid');
-        $price = $this->request->input('price');
-        $token = session_get('mollie-transaction-id');
+        $order = $this->model('order')->current($type, $typeId, 'mollie');
+        $price = $order['amount'];
+        $token = $order['reference_id'];
 
         if (!$token) exit('Invalid');
 
-        if (session_get('about-pay-price') != $price) $price = session_get('about-pay-price');
         $gateway = \Omnipay\Omnipay::create('Mollie');
 
         $gateway->setApiKey(config('mollie-api-key'));
@@ -409,25 +299,15 @@ class PaymentController extends Controller {
         if ($oResponse->isSuccessful()) {
             $data = $oResponse->getData();
             if ($data['status'] == 'paid') {
-                $this->model('admin')->addTransaction(array(
-                    'amount' =>  (!userCurrencySupportMollie()) ? $price : convertBackToBase($price),
-                    'type' => $type,
-                    'type_id' => $typeId,
-                    'sale_id' => $token,
-                    'name' => $this->model('user')->authUser['full_name'],
-                    'country' => $this->model('user')->authUser['country'],
-                    'email' => $this->model('user')->authUser['email'],
-                    'userid' => $this->model('user')->authId
-                ));
-                Hook::getInstance()->fire('payment.success', null, array($type, $typeId));
-                if (session_get('mobile-pay') == 1) $this->request->request(url('api/pay/success'));
+                $this->model('order')->fulfill($order, 'mollie', $token, $data['amount']['value'] ?? null, $data['amount']['currency'] ?? '');
+                if (session_get('mobile-pay') == 1) $this->request->redirect(url('api/pay/success'));
                 $this->request->redirect($url);
             } else {
-                if (session_get('mobile-pay') == 1) $this->request->request(url('api/pay/failed'));
+                if (session_get('mobile-pay') == 1) $this->request->redirect(url('api/pay/failed'));
                 $this->request->redirect(url(''));
             }
         } else {
-            if (session_get('mobile-pay') == 1) $this->request->request(url('api/pay/failed'));
+            if (session_get('mobile-pay') == 1) $this->request->redirect(url('api/pay/failed'));
             $this->request->redirect(($type == 'pro') ? url('pro') : url());
         }
     }
@@ -452,7 +332,8 @@ class PaymentController extends Controller {
                 return json_encode(array('type' => 'error', 'message' => l('kindly-upload-receipt-file')));
             }
 
-            return $this->model('admin')->saveBankTransfer($val);
+            $order = $this->model('order')->current($val['type'], $val['typeid'], 'bank');
+            return $this->model('admin')->saveBankTransfer($order, $file);
 
         }
     }

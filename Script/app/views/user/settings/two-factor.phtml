@@ -16,3 +16,11 @@
         <?php endif?>
     </div>
 </div>
+
+<?php if (config('enable-facebook',false) && empty($user['facebookid'])): ?>
+<form method="post" action="<?php echo url('auth/facebook')?>">
+    <input type="hidden" name="link_account" value="1">
+    <input type="hidden" name="csrf_token" value="<?php echo csrfToken()?>">
+    <button class="btn btn-secondary" type="submit">Link Facebook account</button>
+</form>
+<?php endif ?>

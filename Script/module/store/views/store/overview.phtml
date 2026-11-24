@@ -1,5 +1,5 @@
-<div class="row">
-    <div class="col-md-8">
+<div class="bc-market">
+    <div class="bc-market-shelves">
         <div class="store-title clearfix">
             <div class="float-left">
                 <?php _l('new-music')?>
@@ -63,14 +63,9 @@
 
 
     </div>
-    <div class="col-md-4">
+    <div class="bc-market-charts">
 
-        <select onchange="load_store_browse(this, 'tracks')" id="filter-genre"  class="select-input" data-ui-select="true" style="">
-            <option value="all"><?php _l('all-genres')?></option>
-            <?php foreach($C->model('admin')->getGenres() as $dgenre):?>
-                <option  value="<?php echo $dgenre['id']?>"><?php echo $dgenre['name']?></option>
-            <?php endforeach;?>
-        </select>
+
 
         <h6 class="mt-4"><a  href="<?php echo url('store/top-songs')?>" data-ajax="true"><?php _l('top-songs')?> <i class="la la-chevron-right "></i></a> </h6>
 
@@ -82,7 +77,7 @@
                 <?php
                 $user = $C->model('user')->getUser($track['userid']);
                 ?>
-                <div class="art" style="background-image: url(<?php echo $C->model('track')->getArt($track)?>);width:20px;height:20px">
+                <div class="art" style="background-image: url(<?php echo $C->model('track')->getArt($track)?>)">
                     <div class="track-hover-display">
                         <a href=""
                            data-id="<?php echo $track['id']?>"
@@ -142,7 +137,7 @@
                 <?php
                 $user = $C->model('user')->getUser($dtrack['userid']);
                 ?>
-                <div class="art" style="background-image: url(<?php echo $C->model('track')->getArt($track)?>);width:20px;height:20px">
+                <div class="art" style="background-image: url(<?php echo $C->model('track')->getArt($track)?>)">
                     <div class="track-hover-display">
                         <a href=""
                            data-id="<?php echo $track['id']?>"

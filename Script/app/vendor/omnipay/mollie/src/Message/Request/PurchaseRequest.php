@@ -10,6 +10,7 @@ use Omnipay\Mollie\Message\Response\PurchaseResponse;
  * Create a payment with the Mollie API.
  *
  * @see https://docs.mollie.com/reference/v2/payments-api/create-payment
+ * @method PurchaseResponse send()
  */
 class PurchaseRequest extends AbstractMollieRequest
 {
@@ -65,6 +66,92 @@ class PurchaseRequest extends AbstractMollieRequest
     }
 
     /**
+     * @return string
+     */
+    public function getCustomerReference()
+    {
+        return $this->getParameter('customerReference');
+    }
+
+    /**
+     * @param string $value
+     * @return $this
+     */
+    public function setCustomerReference($value)
+    {
+        return $this->setParameter('customerReference', $value);
+    }
+
+    /**
+     * @return string
+     */
+    public function getMandateId()
+    {
+        return $this->getParameter('mandateId');
+    }
+
+    /**
+     * @param string $value
+     * @return $this
+     */
+    public function setMandateId($value)
+    {
+        return $this->setParameter('mandateId', $value);
+    }
+    
+    /**
+     * @return string
+     */
+    public function getSequenceType()
+    {
+        return $this->getParameter('sequenceType');
+    }
+
+    /**
+     * @param string $value
+     * @return $this
+     */
+    public function setSequenceType($value)
+    {
+        return $this->setParameter('sequenceType', $value);
+    }
+
+    /**
+     * @return string
+     */
+    public function getCardToken()
+    {
+        return $this->getParameter('cardToken');
+    }
+
+    /**
+     * @param string $value
+     * @return $this
+     */
+    public function setCardToken($value)
+    {
+        return $this->setParameter('cardToken', $value);
+    }
+
+    /**
+     * @return string
+     */
+    public function getInclude()
+    {
+        return $this->getParameter('include');
+    }
+
+    /**
+     * @param string $value
+     * @return $this
+     */
+    public function setInclude($value)
+    {
+        return $this->setParameter('include', $value);
+    }
+
+
+    /**
      * @return array
      * @throws InvalidRequestException
      */
@@ -103,6 +190,22 @@ class PurchaseRequest extends AbstractMollieRequest
             $data['billingEmail'] = $billingEmail;
         }
 
+        if ($customerReference = $this->getCustomerReference()) {
+            $data['customerId'] = $customerReference;
+        }
+
+        if ($sequenceType = $this->getSequenceType()) {
+            $data['sequenceType'] = $sequenceType;
+        }
+        
+        if ($mandateId = $this->getMandateId()) {
+            $data['mandateId'] = $mandateId;
+        }
+
+        if ($cardToken = $this->getCardToken()) {
+            $data['cardToken'] = $cardToken;
+        }
+
         return $data;
     }
 
@@ -112,7 +215,13 @@ class PurchaseRequest extends AbstractMollieRequest
      */
     public function sendData($data)
     {
-        $response = $this->sendRequest(self::POST, '/payments', $data);
+        $endpoint = '/payments';
+
+        if ($include = $this->getInclude()) {
+            $endpoint .= '?include=' . $include;
+        }
+
+        $response = $this->sendRequest(self::POST, $endpoint, $data);
 
         return $this->response = new PurchaseResponse($this, $response);
     }

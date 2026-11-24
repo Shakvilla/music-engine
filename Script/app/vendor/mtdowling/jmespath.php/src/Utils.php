@@ -3,7 +3,7 @@ namespace JmesPath;
 
 class Utils
 {
-    static $typeMap = [
+    public static $typeMap = [
         'boolean' => 'boolean',
         'string'  => 'string',
         'NULL'    => 'null',
@@ -22,7 +22,7 @@ class Utils
     public static function isTruthy($value)
     {
         if (!$value) {
-            return $value === 0 || $value === '0';
+            return $value === 0 || $value === 0.0 || $value === '0';
         } elseif ($value instanceof \stdClass) {
             return (bool) get_object_vars($value);
         } else {
@@ -58,12 +58,18 @@ class Utils
             return count($arg) == 0 || $arg->offsetExists(0)
                 ? 'array'
                 : 'object';
-        } elseif (method_exists($arg, '__toString')) {
-            return 'string';
+        } elseif (is_object($arg)) {
+            if (method_exists($arg, '__toString')) {
+                return 'string';
+            }
+
+            throw new \InvalidArgumentException(
+                'Unable to determine JMESPath type from ' . get_class($arg)
+            );
         }
 
         throw new \InvalidArgumentException(
-            'Unable to determine JMESPath type from ' . get_class($arg)
+            'Unable to determine JMESPath type from ' . gettype($arg)
         );
     }
 
@@ -106,7 +112,10 @@ class Utils
     }
 
     /**
-     * JSON aware value comparison function.
+     * JSON-semantic equality: one number type, structural comparison for arrays
+     * and objects, and no object key-order sensitivity.
+     * Empty arrays and empty objects compare equal because PHP cannot represent
+     * that distinction after associative JSON decoding.
      *
      * @param mixed $a First value to compare
      * @param mixed $b Second value to compare
@@ -115,14 +124,62 @@ class Utils
      */
     public static function isEqual($a, $b)
     {
-        if ($a === $b) {
+        $typeA = self::type($a);
+        $typeB = self::type($b);
+
+        if ($typeA !== $typeB) {
+            return ($typeA === 'array' || $typeA === 'object')
+                && ($typeB === 'array' || $typeB === 'object')
+                && (array) $a === []
+                && (array) $b === [];
+        }
+
+        if ($typeA === 'number') {
+            return $a == $b;
+        }
+
+        if ($typeA === 'array' || $typeA === 'object') {
+            $a = (array) $a;
+            $b = (array) $b;
+
+            if (count($a) !== count($b)) {
+                return false;
+            }
+
+            foreach ($a as $key => $value) {
+                if (!array_key_exists($key, $b) || !self::isEqual($value, $b[$key])) {
+                    return false;
+                }
+            }
+
             return true;
-        } elseif ($a instanceof \stdClass) {
-            return self::isEqual((array) $a, $b);
-        } elseif ($b instanceof \stdClass) {
-            return self::isEqual($a, (array) $b);
+        }
+
+        return $a === $b;
+    }
+
+    /**
+     * Safely add together two values.
+     *
+     * @param mixed $a First value to add
+     * @param mixed $b Second value to add
+     *
+     * @return int|float
+     */
+    public static function add($a, $b)
+    {
+        if (is_numeric($a)) {
+            if (is_numeric($b)) {
+                return $a + $b;
+            } else {
+                return $a;
+            }
         } else {
-            return false;
+            if (is_numeric($b)) {
+                return $b;
+            } else {
+                return 0;
+            }
         }
     }
 
@@ -135,19 +192,23 @@ class Utils
      * @param callable $sortFn Callable used to sort values
      *
      * @return array Returns the sorted array
-     * @link http://en.wikipedia.org/wiki/Schwartzian_transform
+     * @link https://en.wikipedia.org/wiki/Schwartzian_transform
      */
     public static function stableSort(array $data, callable $sortFn)
     {
         // Decorate each item by creating an array of [value, index]
-        array_walk($data, function (&$v, $k) { $v = [$v, $k]; });
+        array_walk($data, function (&$v, $k) {
+            $v = [$v, $k];
+        });
         // Sort by the sort function and use the index as a tie-breaker
         uasort($data, function ($a, $b) use ($sortFn) {
             return $sortFn($a[0], $b[0]) ?: ($a[1] < $b[1] ? -1 : 1);
         });
 
         // Undecorate each item and return the resulting sorted array
-        return array_map(function ($v) { return $v[0]; }, array_values($data));
+        return array_map(function ($v) {
+            return $v[0];
+        }, array_values($data));
     }
 
     /**
@@ -163,7 +224,7 @@ class Utils
      */
     public static function slice($value, $start = null, $stop = null, $step = 1)
     {
-        if (!is_array($value) && !is_string($value)) {
+        if (!is_string($value) && !self::isArray($value)) {
             throw new \InvalidArgumentException('Expects string or array');
         }
 
@@ -210,7 +271,10 @@ class Utils
     private static function sliceIndices($subject, $start, $stop, $step)
     {
         $type = gettype($subject);
-        $len = $type == 'string' ? strlen($subject) : count($subject);
+        if ($type == 'string') {
+            $subject = mb_str_split($subject, 1, 'UTF-8');
+        }
+        $len = count($subject);
         list($start, $stop, $step) = self::adjustSlice($len, $start, $stop, $step);
 
         $result = [];
@@ -224,6 +288,6 @@ class Utils
             }
         }
 
-        return $type == 'string' ? implode($result, '') : $result;
+        return $type == 'string' ? implode('', $result) : $result;
     }
 }

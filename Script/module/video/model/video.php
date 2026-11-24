@@ -266,8 +266,8 @@ class VideoModel extends Model {
             $sql .= " AND id != ? ";
             $param[] = $videoId;
         }
-        $sql .= " ORDER BY rand() LIMIT $limit ";
-        $query = $this->db->query($sql, $param);
+        $sql .= " ORDER BY rand() LIMIT ? ";
+        $query = $this->db->query($sql, array_merge($param,[paginationNumber($limit,true)]));
         return $query->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -352,8 +352,8 @@ class VideoModel extends Model {
         if (!$sql) {
             return array();
         } else {
-            $sql .= " LIMIT $limit OFFSET $offset";
-            $query = $this->db->query($sql, $param);
+            $sql .= " LIMIT ? OFFSET ?";
+            $query = $this->db->query($sql, array_merge($param,[paginationNumber($limit,true), paginationNumber($offset,false)]));
             return $query->fetchAll(PDO::FETCH_ASSOC);
         }
     }

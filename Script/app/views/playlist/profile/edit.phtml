@@ -12,7 +12,7 @@ $image = model('track')->getPlaylistArt($playlist,$user, $trackFirst, 200);
             <a class="nav-link"  data-toggle="tab" href="#order"><?php _l('re-order-tracks')?></a>
         </li>
         <?php if(model('user')->isLoggedIn() and $playlist['userid'] == $C->model('user')->authId):?>
-            <a style="position:absolute; right: 0;top:0" class="btn btn-sm btn-outline-danger mt-3 round-sm confirm"  data-toggle="tab" href="<?php echo url('playlist/delete', array('id' => $playlist['id']))?>"><i class="la la-trash"></i> <?php _l('delete-playlist')?></a>
+            <button type="button" class="btn btn-sm btn-outline-danger mt-3 round-sm confirm" data-post-url="<?php echo url('playlist/delete', array('id' => $playlist['id']))?>"><i class="la la-trash"></i> <?php _l('delete-playlist')?></button>
 
         <?php endif?>
 

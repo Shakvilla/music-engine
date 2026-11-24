@@ -1,8 +1,18 @@
 <?php
+ini_set('session.use_strict_mode', '1');
+ini_set('session.use_only_cookies', '1');
+$secureSessionCookie = filter_var(getenv('APP_HTTPS') ?: 'false', FILTER_VALIDATE_BOOLEAN);
+session_set_cookie_params(array(
+    'lifetime' => 0,
+    'path' => '/',
+    'secure' => $secureSessionCookie,
+    'httponly' => true,
+    'samesite' => 'Lax'
+));
 session_start();
 error_reporting(-1);
 //header('Access-Control-Allow-Origin: *');
-ini_set('memory_limit', '-1'); // unlimited memory limit
+// Web workers inherit the bounded memory limit in php.ini.
 date_default_timezone_set('UTC');
 //exit(md5('250.0012rhz4c'));
 //exit(date('y m d h:s:i a', '1572566400'));

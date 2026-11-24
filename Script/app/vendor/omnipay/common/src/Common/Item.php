@@ -12,21 +12,17 @@ use Symfony\Component\HttpFoundation\ParameterBag;
  *
  * This class defines a single cart item in the Omnipay system.
  *
- * @see ItemInterface
  */
 class Item implements ItemInterface
 {
-    /**
-     * @var \Symfony\Component\HttpFoundation\ParameterBag
-     */
-    protected $parameters;
+    use ParametersTrait;
 
     /**
      * Create a new item with the specified parameters
      *
      * @param array|null $parameters An array of parameters to set on the new object
      */
-    public function __construct(array $parameters = null)
+    public function __construct(?array $parameters = null)
     {
         $this->initialize($parameters);
     }
@@ -37,31 +33,11 @@ class Item implements ItemInterface
      * @param array|null $parameters An array of parameters to set on this object
      * @return $this Item
      */
-    public function initialize(array $parameters = null)
+    public function initialize(?array $parameters = null)
     {
         $this->parameters = new ParameterBag;
 
         Helper::initialize($this, $parameters);
-
-        return $this;
-    }
-
-    /**
-     * @return array
-     */
-    public function getParameters()
-    {
-        return $this->parameters->all();
-    }
-
-    protected function getParameter($key)
-    {
-        return $this->parameters->get($key);
-    }
-
-    protected function setParameter($key, $value)
-    {
-        $this->parameters->set($key, $value);
 
         return $this;
     }

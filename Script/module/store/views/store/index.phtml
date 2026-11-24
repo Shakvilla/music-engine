@@ -1,5 +1,18 @@
-<div class="profile-menu">
+<div class="profile-menu<?php if ($type === 'store' || $type === 'browse'):?> bc-market-nav<?php endif?>">
     <div class="inner-container">
+        <?php if ($type === 'store' || $type === 'browse'):?>
+            <header class="bc-market-mast">
+                <h1><?php _l('store')?></h1>
+                <?php if ($type === 'store'):?>
+                <select onchange="load_store_browse(this, 'tracks')" id="filter-genre"  class="select-input" aria-label="<?php _l('genre')?>">
+            <option value="all"><?php _l('all-genres')?></option>
+            <?php foreach($C->model('admin')->getGenres() as $dgenre):?>
+                <option  value="<?php echo $dgenre['id']?>"><?php echo $dgenre['name']?></option>
+            <?php endforeach;?>
+        </select>
+                <?php endif?>
+            </header>
+        <?php endif?>
         <ul class="nav nav-tabs">
             <li class="nav-item">
                 <a class="nav-link <?php echo $type == 'store' ? 'active' : null?>" data-ajax="true" href="<?php echo url('store')?>" ><?php _l('store')?></a>
@@ -13,6 +26,7 @@
 
             <li class="nav-item">
                 <a class="nav-link <?php echo $type == 'top-albums' ? 'active' : null?>"  data-ajax="true" href="<?php echo url('store/top-albums')?>"><?php _l('top-albums')?></a>
+            </li>
 
             <li class="nav-item">
                 <a class="nav-link <?php echo $type == 'purchase' ? 'active' : null?>"  data-ajax="true" href="<?php echo url('store/purchased')?>"><?php _l('purchased')?></a>

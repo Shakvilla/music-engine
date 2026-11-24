@@ -4,6 +4,7 @@ namespace Aws\Crypto;
 use GuzzleHttp\Psr7;
 use GuzzleHttp\Psr7\AppendStream;
 use GuzzleHttp\Psr7\Stream;
+use Psr\Http\Message\StreamInterface;
 
 trait EncryptionTrait
 {
@@ -48,8 +49,8 @@ trait EncryptionTrait
      *
      * @internal
      */
-    protected function encrypt(
-        Stream $plaintext,
+    public function encrypt(
+        StreamInterface $plaintext,
         array $cipherOptions,
         MaterialsProvider $provider,
         MetadataEnvelope $envelope
@@ -116,8 +117,6 @@ trait EncryptionTrait
         $envelope[MetadataEnvelope::CONTENT_CRYPTO_SCHEME_HEADER] = $aesName;
         $envelope[MetadataEnvelope::UNENCRYPTED_CONTENT_LENGTH_HEADER] =
             strlen($plaintext);
-        $envelope[MetadataEnvelope::UNENCRYPTED_CONTENT_MD5_HEADER] =
-            base64_encode(md5($plaintext));
         $envelope[MetadataEnvelope::MATERIALS_DESCRIPTION_HEADER] =
             json_encode($materialsDescription);
         if (!empty($cipherOptions['Tag'])) {
@@ -139,12 +138,12 @@ trait EncryptionTrait
      * @param array $cipherOptions Options for use in determining the cipher to
      *                             be used for encrypting data.
      *
-     * @return [AesStreamInterface, string]
+     * @return array returns an array with two elements as follows: [string, AesStreamInterface]
      *
      * @internal
      */
     protected function getEncryptingStream(
-        Stream $plaintext,
+        StreamInterface $plaintext,
         $cek,
         &$cipherOptions
     ) {
@@ -158,16 +157,24 @@ trait EncryptionTrait
                     $cipherOptions['Iv'],
                     $cipherOptions['Aad'] = isset($cipherOptions['Aad'])
                         ? $cipherOptions['Aad']
-                        : null,
+                        : '',
                     $cipherOptions['TagLength'],
                     $cipherOptions['KeySize']
                 );
+
+                if (!empty($cipherOptions['Aad'])) {
+                    trigger_error("'Aad' has been supplied for content encryption"
+                        . " with " . $cipherTextStream->getAesName() . ". The"
+                        . " PHP SDK encryption client can decrypt an object"
+                        . " encrypted in this way, but other AWS SDKs may not be"
+                        . " able to.", E_USER_WARNING);
+                }
 
                 $appendStream = new AppendStream([
                     $cipherTextStream->createStream()
                 ]);
                 $cipherOptions['Tag'] = $cipherTextStream->getTag();
-                $appendStream->addStream(Psr7\stream_for($cipherOptions['Tag']));
+                $appendStream->addStream(Psr7\Utils::streamFor($cipherOptions['Tag']));
                 return [$appendStream, $cipherTextStream->getAesName()];
             default:
                 $cipherMethod = $this->buildCipherMethod(

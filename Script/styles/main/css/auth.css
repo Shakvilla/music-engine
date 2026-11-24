@@ -1,0 +1,127 @@
+.bc-auth-screen, #authModal {
+    --auth-card-width: 600px;
+    --auth-paper: #fff;
+    --auth-ink: #1c261f;
+    --auth-line: #cbd4ce;
+    --auth-brand: var(--auth-theme-button, #00b263);
+    font: 1rem/1.5 "Avenir Next", Arial, sans-serif;
+    color: var(--auth-ink);
+}
+.bc-auth-screen {
+    min-height: 100vh; min-height: 100dvh; padding: clamp(18px,5vw,70px) 5%;
+    display: grid; place-items: center; background: #f4f5ef;
+}
+.bc-auth-panel {
+    width: min(100%, var(--auth-card-width));
+    background: var(--auth-paper); border-radius: 18px; overflow: hidden;
+    box-shadow: 0 14px 50px #1b412018;
+}
+.bc-auth-form { padding: clamp(28px,4vw,58px); min-width: 0; }
+.bc-auth-brand { display: inline-block; }
+.bc-auth-brand img { width: 132px; height: auto; }
+.bc-auth-form h1, #authModal h2 { color: inherit; font-weight: 650; letter-spacing: -.05em; line-height: 1.08; }
+.bc-auth-form h1 { margin: 26px 0; font-size: clamp(30px,3.2vw,42px); }
+#authModal h2 { margin: 0 0 20px; font-size: 26px; }
+.bc-auth-label { display: block; margin-bottom: 4px; font-size: 1rem; font-weight: 600; }
+.bc-auth-form .form-control, #authModal .form-control {
+    border: 1px solid var(--auth-line); border-radius: 7px;
+    background: var(--auth-paper); color: var(--auth-ink); font: inherit;
+}
+.bc-auth-form input.form-control, #authModal input.form-control {
+    box-sizing: border-box; height: auto; min-height: 2.25rem; padding: 5px 10px;
+}
+@media (max-width: 650px) {
+    .bc-auth-form input.form-control, #authModal input.form-control {
+        min-height: 2.5rem; font-size: 1rem;
+    }
+}
+.bc-auth-form .btn-primary, #authModal .btn-primary {
+    width: 100%; min-height: 44px; border: 0; border-radius: 7px;
+    background: var(--auth-brand); color: var(--auth-theme-button-text, #fff); font-weight: 650;
+}
+.bc-auth-form :focus-visible, #authModal :focus-visible { outline: 2px solid var(--auth-brand); outline-offset: 2px; }
+.bc-auth-form p a, #authModal p a { color: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+#authModal .modal-dialog { width: min(var(--auth-card-width), calc(100% - 32px)); max-width: none; margin: max(20px,5vh) auto; }
+#authModal .modal-content { display: block; background: var(--auth-paper); border: 0; border-radius: 18px; overflow: hidden; }
+#authModal .bc-auth-dialog-form { min-width: 0; }
+#authModal .modal-body { background: var(--auth-paper); padding: 20px clamp(24px,4vw,50px) 32px; }
+#authModal .modal-header { display: flex; justify-content: flex-end; padding: 8px 12px 0; border: 0; }
+#authModal .close { position: static; color: var(--auth-ink); width: 40px; height: 40px; }
+@media(max-width:650px) {
+    #authModal .modal-dialog { margin: 12px auto; }
+}
+.dark-mode .bc-auth-screen, .dark-mode #authModal { --auth-paper: #252a27; --auth-ink: #f2f5ef; --auth-line: #59635c; }
+.dark-mode .bc-auth-screen { background: #1a1e1b; }
+@media(max-width:650px) {
+    .bc-auth-form { padding: 24px; }
+}
+
+.bc-social-login .bc-provider-link {
+    display: grid;
+    grid-template-columns: 26px minmax(0, 1fr) 26px;
+    align-items: center;
+    gap: 8px;
+    min-height: 48px;
+    padding: 8px 14px;
+    border: 1px solid var(--auth-line);
+    border-radius: 8px;
+    background: var(--auth-paper);
+    color: var(--auth-ink);
+    font-size: 1rem;
+    font-weight: 600;
+    text-align: center;
+    text-decoration: none;
+}
+.bc-provider-mark {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #1877f2;
+    color: #fff;
+    font-size: 17px;
+}
+.bc-provider-link:is(:hover,:focus-visible) { border-color: var(--auth-ink); }
+#authModal[aria-labelledby="dialog-signup-heading"] .modal-dialog { margin-block: 12px; }
+#authModal .signup-form h2 { margin-bottom: 12px; }
+
+.bc-signup-fields, .bc-signup-captcha {
+    display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px 16px;
+    margin-bottom: 12px;
+}
+.bc-signup-fields .form-group { margin: 0; min-width: 0; }
+.bc-signup-captcha { align-items: end; }
+.bc-signup .bc-challenge { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.bc-challenge img { min-width: 0; max-width: calc(100% - 38px); max-height: 58px; object-fit: contain; }
+.bc-challenge a { display: grid; place-items: center; min-width: 32px; min-height: 44px; }
+.bc-signup-footer { margin: 12px 0 0; text-align: center; }
+.bc-signup-fields .form-group:nth-child(n+3) { grid-column: 1 / -1; }
+@media(max-width:650px) {
+    #authModal .modal-body { padding: 16px 20px 20px; }
+}
+@media(max-width:480px) {
+    .bc-signup-fields { grid-template-columns: minmax(0,1fr); }
+}
+@media(max-width:360px) {
+    .bc-signup-captcha { grid-template-columns: minmax(0,1fr); }
+}
+
+.bc-auth-methods, .bc-auth-flow .bc-auth-back { display: none; }
+.bc-auth-enhanced .bc-auth-flow:not(.is-email) .bc-auth-methods,
+.bc-auth-enhanced .bc-auth-flow.is-email .bc-auth-back { display: block; }
+.bc-auth-enhanced .bc-auth-flow:not(.is-email) .bc-auth-credentials { display: none; }
+.bc-auth-methods { max-width: 420px; margin: 0 auto; text-align: center; padding: 12px 0 24px; }
+.bc-auth-form .bc-auth-flow h2, #authModal .bc-auth-flow h2 {
+    margin: 0 0 22px; color: var(--auth-ink); font-size: clamp(26px, 4vw, 34px);
+    line-height: 1.12; letter-spacing: -.04em; font-weight: 650;
+}
+.bc-auth-form .bc-auth-brand { margin-bottom: 20px; }
+.bc-auth-methods .bc-provider-link, .bc-auth-methods .bc-email-method {
+    position: relative; display: flex; align-items: center; justify-content: center;
+    min-height: 48px; padding: 10px 46px; border-radius: 24px; font: inherit; font-weight: 600;
+}
+.bc-auth-methods .bc-provider-mark, .bc-email-method i { position: absolute; left: 16px; }
+.bc-auth-methods .bc-social-login { margin-bottom: 10px; }
+.bc-auth-back { border: 0; padding: 4px 0; margin-bottom: 12px; color: inherit; background: transparent; cursor: pointer; }
+.bc-auth-credentials p { text-align: center; }

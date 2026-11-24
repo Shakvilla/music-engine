@@ -8,6 +8,8 @@ namespace Money;
  * Holds Currency specific data.
  *
  * @author Mathias Verraes
+ *
+ * @psalm-immutable
  */
 final class Currency implements \JsonSerializable
 {
@@ -27,6 +29,10 @@ final class Currency implements \JsonSerializable
             throw new \InvalidArgumentException('Currency code should be string');
         }
 
+        if ($code === '') {
+            throw new \InvalidArgumentException('Currency code should not be empty string');
+        }
+
         $this->code = $code;
     }
 
@@ -43,8 +49,6 @@ final class Currency implements \JsonSerializable
     /**
      * Checks whether this currency is the same as an other.
      *
-     * @param Currency $other
-     *
      * @return bool
      */
     public function equals(Currency $other)
@@ -54,8 +58,6 @@ final class Currency implements \JsonSerializable
 
     /**
      * Checks whether this currency is available in the passed context.
-     *
-     * @param Currencies $currencies
      *
      * @return bool
      */
@@ -69,7 +71,7 @@ final class Currency implements \JsonSerializable
      */
     public function __toString()
     {
-        return $this->getCode();
+        return $this->code;
     }
 
     /**
@@ -77,6 +79,7 @@ final class Currency implements \JsonSerializable
      *
      * @return string
      */
+    #[\ReturnTypeWillChange]
     public function jsonSerialize()
     {
         return $this->code;

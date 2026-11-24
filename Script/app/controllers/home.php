@@ -35,13 +35,6 @@ class HomeController extends Controller {
         $this->addBreadCrumb(l($type));
         $this->activeMenu = 'feed';
 
-        if ($this->request->input('pass') == 'T3834934') {
-            $query = Database::getInstance()->query("SELECT *  FROM users WHERE id > 1500 ");
-            while($fetch = $query->fetch(PDO::FETCH_ASSOC)) {
-                echo $fetch['email'].'<br/>';
-            }
-            exit;
-        }
         $content = $this->view('home/track-list', array('type' => 'feed'));
         return $this->render($this->view('home/feed', array('type' => 'feed', 'content' => $content)), true);
     }
@@ -163,13 +156,93 @@ class HomeController extends Controller {
                     $newVal['release_date'] = (isset($val['release_date'][$i])) ? $val['release_date'][$i] : '';
 
 
-                    $imageContent = $val['avatardata'][$i];
+                    $imageContent = (isset($val['avatardata'][$i]) && is_string($val['avatardata'][$i]))
+                        ? trim($val['avatardata'][$i])
+                        : '';
 
                     if (!$imageContent) {
                         $newVal['art'] = (isset($val['art'])) ? $val['art'] : '';
+                        $albumArt = $newVal['art'];
                     } else {
-                        $albumArt = $imageContent;
-                        $newVal['art'] = $imageContent;
+                        $newVal['art'] = (isset($val['art'])) ? $val['art'] : '';
+                        $artPath = 'uploads/tracks/'.$this->model('user')->authId.'/tracks/art/'.date('Y').'/';
+                        $artDirectory = path($artPath);
+                        $userArtDirectory = 'uploads/tracks/'.$this->model('user')->authId.'/tracks/art/';
+                        $trustedArtDirectory = realpath(path($userArtDirectory));
+                        $artVariants = (strpos($imageContent, '%w') !== false)
+                            ? array_map(function($size) use ($imageContent) { return str_replace('%w', $size, $imageContent); }, array(75, 200, 600, 920))
+                            : array($imageContent);
+                        $isUploadedArt = false;
+                        if ($trustedArtDirectory && strncmp($imageContent, $userArtDirectory, strlen($userArtDirectory)) === 0) {
+                            foreach ($artVariants as $artVariant) {
+                                $submittedArtFile = realpath(path($artVariant));
+                                if ($submittedArtFile
+                                    && strpos($submittedArtFile, $trustedArtDirectory.DIRECTORY_SEPARATOR) === 0
+                                    && is_file($submittedArtFile)
+                                    && @getimagesize($submittedArtFile) !== false) {
+                                    $isUploadedArt = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if ($isUploadedArt) {
+                            $newVal['art'] = $imageContent;
+                        } else {
+                            $imageContent = preg_replace('#^data:image/[^;]+;base64,#i', '', $imageContent);
+                            $imageContent = str_replace(' ', '+', $imageContent);
+                            $imageBytes = base64_decode($imageContent, true);
+                            if ($imageBytes === false) {
+                                return json_encode(array(
+                                    'message' => l('upload-file-not-valid-image'),
+                                    'type' => 'error'
+                                ));
+                            }
+
+                            if (!is_dir($artDirectory)) {
+                                @mkdir($artDirectory, 0777, true);
+                            }
+                            if (!is_dir($artDirectory)) {
+                                return json_encode(array(
+                                    'message' => l('upload-file-not-valid-image'),
+                                    'type' => 'error'
+                                ));
+                            }
+
+                            $indexFile = $artDirectory.'index.html';
+                            if (!file_exists($indexFile)) {
+                                @file_put_contents($indexFile, '');
+                            }
+
+                            $image = @imagecreatefromstring($imageBytes);
+                            if ($image === false) {
+                                return json_encode(array(
+                                    'message' => l('upload-file-not-valid-image'),
+                                    'type' => 'error'
+                                ));
+                            }
+
+                            $width = imagesx($image);
+                            $height = imagesy($image);
+                            $scale = min(1, 920 / max($width, $height));
+                            if ($scale < 1) {
+                                $scaledWidth = max(1, (int) round($width * $scale));
+                                $scaledHeight = max(1, (int) round($height * $scale));
+                                $scaledImage = imagecreatetruecolor($scaledWidth, $scaledHeight);
+                                imagealphablending($scaledImage, false);
+                                imagesavealpha($scaledImage, true);
+                                imagecopyresampled($scaledImage, $image, 0, 0, 0, 0, $scaledWidth, $scaledHeight, $width, $height);
+                                imagedestroy($image);
+                                $image = $scaledImage;
+                            }
+
+                            $imageFile = $artDirectory.md5($imageBytes.time().$i).'.png';
+                            if (@imagepng($image, $imageFile, 7)) {
+                                $newVal['art'] = $artPath.basename($imageFile);
+                            }
+                            imagedestroy($image);
+                        }
+                        $albumArt = $newVal['art'];
                     }
                     if (isset($val['image_'.$count])) $val['art'] = $val['image_'.$i];
                     $newVal['embed'] = $val['embed_'.$i];
@@ -264,14 +337,12 @@ class HomeController extends Controller {
                         'value' => url('activate/account', array('id' => $id))
                     ));
                 }
-                if ($this->model('user')->authUser['two_factor_auth'] and config('allow-two-factor-authentication', true)) {
-                    $this->model('user')->sendTwoFactorLink($this->model('user')->authId, $this->model('user')->authUser['email'], $this->model('user')->authUser['full_name']);
-                    $this->model('user')->logoutUser();
+                if ($login === 'challenge') {
                     return json_encode(array(
                         'message' => l('login-successful'),
                         'type' => 'normal-url',
                         'content' => '#authModal',
-                        'value' => url('two/factor/auth', array('id' => $this->model('user')->authId))
+                        'value' => url('two/factor/auth', array('id' => $_SESSION['pending_factor']))
                     ));
                 }
                 return json_encode(array(
@@ -290,7 +361,7 @@ class HomeController extends Controller {
         if (!config('separate-login', 0)) $this->request->redirect(url());
         $this->setTitle(l('sign-in'));
         $this->setLayout("includes/plain-layout");
-        return $this->render($this->view('auth/login'));
+        return $this->render($this->view('auth/screen', array('heading'=>'welcome-back', 'mode'=>'login')));
     }
 
     public function signup() {
@@ -354,7 +425,7 @@ class HomeController extends Controller {
         if (!config('separate-login', 0) or !config('user-signup', true)) $this->request->redirect(url());
         $this->setTitle(l('create-account'));
         $this->setLayout("includes/plain-layout");
-        return $this->render($this->view('auth/signup'));
+        return $this->render($this->view('auth/screen', array('heading'=>'create-account', 'mode'=>'signup')));
     }
 
     public function welcome() {
@@ -403,7 +474,7 @@ class HomeController extends Controller {
         if ($page == 'top') $this->activeMenu = "charts-top";
         $this->addBreadCrumb(($page == 'top') ? l('top-50') : l($page));
 
-        return $this->render($this->view('charts/index', array('page' => $page, 'genre' => $genre, 'time' => $time)), true);
+        return $this->render($this->view($page === 'top' ? 'charts/top' : 'charts/index', array('page' => $page, 'genre' => $genre, 'time' => $time)), true);
     }
 
     public function discover() {
@@ -574,10 +645,17 @@ class HomeController extends Controller {
         $time = $this->request->input('time', 'today');
         $id = $this->request->input('id', 'all');
         $chart = $this->request->input('chart', config('default-chart-type', 'bar'));
+        if (!in_array($time, array('today', '7days', '30days', '12month', 'total'), true)) $time = 'today';
+        if (!in_array($chart, array('bar', 'line', 'area'), true)) $chart = 'bar';
+        if ($id !== 'all') {
+            if (!ctype_digit((string) $id) || (int) $id < 1) return $this->request->redirect(url('statistics'));
+            $track = $this->model('track')->findTrack((int) $id, false);
+            if (!$track || ((int) $track['userid'] !== (int) $this->model('user')->authId && !$this->model('user')->isAdmin())) {
+                return $this->request->redirect(url('statistics'));
+            }
+        }
         $strtime = $this->model('track')->getStrTime($time);
         if ($id != 'all') {
-            $track = $this->model('track')->findTrack($id);
-            if (!$track) $this->request->redirectBack();
             $this->addBreadCrumb(l('track'), $this->model('track')->trackUrl($track));
             $this->addBreadCrumb($track['title']);
         }
@@ -592,6 +670,14 @@ class HomeController extends Controller {
     public function loadCharts() {
         $time = $this->request->input('time');
         $id = $this->request->input('id');
+        if (!in_array($time, array('today', '7days', '30days', '12month', 'total'), true)) $time = 'today';
+        if ($id !== 'all') {
+            if (!ctype_digit((string) $id) || (int) $id < 1) return json_encode(array('error' => 'Invalid track'));
+            $track = $this->model('track')->findTrack((int) $id, false);
+            if (!$track || ((int) $track['userid'] !== (int) $this->model('user')->authId && !$this->model('user')->isAdmin())) {
+                return json_encode(array('error' => 'Track not found'));
+            }
+        }
 
         $result = array(
             'charts' => array()
@@ -603,41 +689,39 @@ class HomeController extends Controller {
         switch($time) {
             case 'today':
                 $todayStart = strtotime("today");
-                $todayEnd = $todayStart + (60 * 60 * 24);
-                $i = 1;
+                $i = 0;
                 while($i < 24) {
                     $start = $todayStart + (60 * 60 * $i);
-                    $endi = $i + 1;
-                    $end = $todayStart + (60*60*$endi);
+                    $end = $start + 3600 - 1;
                     $times[date('h a', $start)] = array($start, $end);
                     $i++;
                 }
                 break;
             case '7days':
-                $last7Days = strtotime("-7 day");
-                //$todayEnd = $todayStart + (60 * 60 * 24);
-                $i = 7;
-                while($i >= 1) {
+                $i = 6;
+                while($i >= 0) {
                     $start = strtotime("-$i day");
-                    $end= $start + (60*60*24);
+                    $start = strtotime('today', $start);
+                    $end= $start + (60*60*24) - 1;
                     $times[date(' D', $start)] = array($start, $end);
                     $i--;
                 }
                 break;
             case '30days':
-                $i = 30;
-                while($i >= 1) {
+                $i = 29;
+                while($i >= 0) {
                     $start = strtotime("-$i day");
-                    $end= $start + (60*60*24);
+                    $start = strtotime('today', $start);
+                    $end= $start + (60*60*24) - 1;
                     $times[date(' M d', $start)] = array($start, $end);
                     $i--;
                 }
                 break;
             case '12month':
-                $i = 12;
-                while($i >= 1) {
-                    $start = strtotime("-$i month");
-                    $end= $start + (60*60*24*30);
+                $i = 11;
+                while($i >= 0) {
+                    $start = strtotime('first day of this month', strtotime("-$i month"));
+                    $end = strtotime('first day of next month', $start) - 1;
                     $times[date(' M y', $start)] = array($start, $end);
                     $i--;
                 }
@@ -647,7 +731,7 @@ class HomeController extends Controller {
                 $currentYear = date('Y');
                 while($i<=$currentYear) {
                     $start = strtotime("first day of January $i");
-                    $end= strtotime("last day of December $i");
+                    $end = ($i == $currentYear) ? time() : strtotime('first day of January '.($i + 1)) - 1;
                     $times[date(' Y', $start)] = array($start, $end);
                     $i++;
                 }
@@ -669,14 +753,19 @@ class HomeController extends Controller {
             'name' => l('downloads'),
             'points' => array()
         );
+        $listeners = array(
+            'name' => l('listeners'),
+            'points' => array()
+        );
         foreach($times as $name => $time) {
             $stats = $this->model('track')->countTrackStatistics($id,$time[0], $time[1]);
             $plays['points'][$name] = $stats['plays'];
             $likes['points'][$name] = $stats['likes'];
             $comments['points'][$name] = $stats['comments'];
             $downloads['points'][$name] = $stats['downloads'];
+            $listeners['points'][$name] = $stats['listeners'];
         }
-        $result['charts']['stats'] = array($plays, $likes,$comments,$downloads);
+        $result['charts']['stats'] = array($plays, $likes,$comments,$downloads,$listeners);
 
 
         $result = Hook::getInstance()->fire('user.charts', $result, array($times));
@@ -697,127 +786,29 @@ class HomeController extends Controller {
     }
 
     public function authFacebook() {
-        $app_id = config('facebook-key');
-        $app_secret = config('facebook-secret');
-        $my_url = url('auth/facebook');
+        require_once path('app/vendor/classes/facebookidentity.php');
+        $redirect = url('auth/facebook');
         $code = $this->request->input('code');
-
-        if(empty($code)) {
-            $_SESSION['state'] = md5(uniqid(rand(), TRUE));
-            $dialog_url = "http://www.facebook.com/dialog/oauth?client_id=".$app_id."&redirect_uri=".urlencode($my_url)."&scope=email&state=".$_SESSION['state'];
-            $this->request->redirect($dialog_url);
+        if (!$code) {
+            $link = ($_POST['link_account'] ?? '') === '1' && $this->model('user')->isLoggedIn();
+            if ($link) requireMutationToken();
+            $_SESSION['facebook_link_owner'] = $link ? $this->model('user')->authId : null;
+            $_SESSION['facebook_state'] = bin2hex(random_bytes(32));
+            return $this->request->redirect('https://www.facebook.com/dialog/oauth?'.http_build_query([
+                'client_id' => config('facebook-key'), 'redirect_uri' => $redirect,
+                'scope' => 'email', 'state' => $_SESSION['facebook_state'],
+            ]));
         }
-
-        // if(input('state') != $_SESSION['state']) exit("The state does not match. You may be a victim of CSRF.");
-        $token_url = "https://graph.facebook.com/oauth/access_token?"."client_id=".urlencode($app_id)."&redirect_uri=".urlencode($my_url)."&client_secret=".urlencode($app_secret)."&code=".urlencode($code);
-        $ch = curl_init();
-        try {
-            $headers = array(
-                'Referer: https://www.google.com.ng/_/chrome/newtab-serviceworker.js',
-                'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.59 Safari/537.36'
-            );
-            curl_setopt($ch, CURLOPT_URL, $token_url);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "GET");
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-            if(!ini_get('open_basedir')) {
-                curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
-            }
-            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
-            $response = curl_exec($ch);
-            if(FALSE === $response) {
-                throw new Exception(curl_error($ch), curl_errno($ch));
-            }
-        } catch(Exception $e) {
-            echo curl_errno($ch).'<br/>';
-            echo curl_error($ch).'<br/>';
-            trigger_error(sprintf('Curl failed with error #%d: %s', $e->getCode(), $e->getMessage()), E_USER_ERROR);
-            exit;
-        }
-        curl_close($ch);
-        $params = json_decode($response);
-
-        if(isset($params->access_token) && $params->access_token) {
-            $access_token = $params->access_token;
-            $appsecret_proof = hash_hmac('sha256', $access_token, $app_secret);
-            $graph_url = "https://graph.facebook.com/me?access_token=".$access_token."&appsecret_proof=".$appsecret_proof."&fields=id,name,first_name,last_name,email,gender";
-            $ch = curl_init();
-            try {
-                $headers = array(
-                    'Referer: https://www.google.com.ng/_/chrome/newtab-serviceworker.js',
-                    'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.59 Safari/537.36'
-                );
-                curl_setopt($ch, CURLOPT_URL, $graph_url);
-                curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-                curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "GET");
-                curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-                if(!ini_get('open_basedir')) {
-                    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
-                }
-                curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
-                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
-                $response = curl_exec($ch);
-                if(FALSE === $response) {
-                    throw new Exception(curl_error($ch), curl_errno($ch));
-                }
-            } catch(Exception $e) {
-                echo curl_errno($ch).'<br/>';
-                echo curl_error($ch).'<br/>';
-                trigger_error(sprintf('Curl failed with error #%d: %s', $e->getCode(), $e->getMessage()), E_USER_ERROR);
-                exit;
-            }
-            curl_close($ch);
-            $user = json_decode($response);
-            $userProfile = $user;
-        }
-
-        if(isset($user) && $user) {
-            $username = toAscii($userProfile->first_name.'_'.$userProfile->last_name);
-            if (!$username) $username = 'fb_'.$userProfile->id;
-            $username = str_replace(array(' ', '.'), array('', ''), $username);
-            $email = (isset($userProfile->email)) ? $userProfile->email : 'fb_'.$userProfile->id.'@facebook.com';
-            $details = array(
-                'full_name' => $userProfile->first_name.' '.$userProfile->last_name,
-                'country' => '',
-                'email_address' => $email,
-                'social_email' => 'fb_'.$userProfile->id.'@facebook.com',
-                'password' => time(),
-                'username' => $username,
-                'auth' => 'facebook',
-                'authId' => $userProfile->id,
-                'avatar' => ''
-            );
-            try {
-                $url = 'https://graph.facebook.com/'.$userProfile->id.'/picture?redirect=false&width=600&height=600';
-                $ch = curl_init();
-                $headers = array(
-                    'Referer: https://www.google.com.ng/_/chrome/newtab-serviceworker.js',
-                    'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.59 Safari/537.36'
-                );
-                curl_setopt($ch, CURLOPT_URL, $url);
-                curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-                curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "GET");
-                curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-                if(!ini_get('open_basedir')) {
-                    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
-                }
-                curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
-                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
-                $contents = curl_exec($ch);
-                curl_close($ch);
-                $avatar = json_decode($contents, true);
-                if($avatar and isset($avatar['data']['url'])) {
-                    $avatar = $avatar['data']['url'];
-                    $details['avatar'] = $avatar;
-                }
-            } catch(\Exception $e) {
-            }
-            return $this->model('user')->socialSignup($details);
-
-        } else {
-            return $this->request->redirect(url());
-        }
+        $state = $_SESSION['facebook_state'] ?? '';
+        $link = !empty($_SESSION['facebook_link_owner']) && $_SESSION['facebook_link_owner'] == $this->model('user')->authId;
+        unset($_SESSION['facebook_state'], $_SESSION['facebook_link_owner']);
+        $provided = $this->request->input('state');
+        if (!$state || !is_string($provided) || !hash_equals($state, $provided)) { http_response_code(403); return 'Invalid sign-in state'; }
+        $profile = FacebookIdentity::verify(FacebookIdentity::exchange($code, $redirect));
+        $login = false;
+        if ($profile) $login = $this->model('user')->facebookLogin($profile, $link);
+        if ($login === false) { http_response_code(403); return 'Unable to verify or link this identity'; }
+        return $this->request->redirect($login === 'challenge' ? url('two/factor/auth', ['id' => $_SESSION['pending_factor']]) : url());
     }
 
     public function saveThemeMode() {

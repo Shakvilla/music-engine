@@ -53,10 +53,10 @@ class SpotlightModel extends Model {
         $sql = "SELECT * FROM spotlight WHERE spotlight.userid=? AND is_global=? ORDER BY id DESC";
         $param = array( $userid, 0);
         if ($global) {
-            $sql = "SELECT * FROM spotlight  WHERE  is_global=? ORDER BY id DESC LIMIT $limit";
+            $sql = "SELECT * FROM spotlight  WHERE  is_global=? ORDER BY id DESC LIMIT ?";
             $param = array(1);
         }
-        $query = $this->db->query($sql,$param);
+        $query = $this->db->query($sql,array_merge($param,[paginationNumber($limit,true)]));
         return $query->fetchAll(PDO::FETCH_ASSOC);
     }
 

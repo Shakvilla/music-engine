@@ -3,6 +3,8 @@ IndexIgnore *
 
     #Options +FollowSymLinks
     RewriteEngine On
+    RewriteRule ^uploads/(?:\.archives/|tmp/zips/|tracks/[^/]+/tracks/[0-9]{4}/|.*\.(?:mp3|wav|m4a|ogg|aac|flac|aiff|wma|opus)$) - [F,NC,L]
+    RewriteRule ^(?:app/cli/|update/|.*\.sql$) - [F,NC,L]
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]

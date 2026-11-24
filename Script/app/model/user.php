@@ -56,29 +56,27 @@ class UserModel extends Model {
     }
 
     function processLogin() {
-        $username = "";
-        $password = "";
-        if (isset($_COOKIE['username']) and isset($_COOKIE['user_token'])) {
-            $username = $_COOKIE['username'];
-            $password = $_COOKIE['user_token'];
-        }
-        if (isset($_SESSION['username']) and isset($_SESSION['user_token'])) {
-            $username = $_SESSION['username'];
-            $password = $_SESSION['user_token'];
-        }
-
-        if (!$username) return false;
-        $query = $this->db->query("SELECT * FROM users WHERE id = ?", $username);
-        $result = $query->fetch(\PDO::FETCH_ASSOC);
-
-        if (!$result or $result['banned'] == 1 or !$result['active']) return false;
-        if (!hash_check($result['password'], $password)) return false;
-        //@TODO - Other processes for specific auth types
-        $this->authId = $result['id'];
-        $this->authUser = $result;
-
-        if (!session_get('user_logout')) $this->saveData($result['id'], $result['password']);
+        $token = $_SESSION['auth_token'] ?? $_COOKIE['auth_token'] ?? '';
+        if (!is_string($token) || !preg_match('/^[a-f0-9]{64}$/D', $token)) return false;
+        $user = $this->credentialUser($token, 'browser');
+        if (!$user) return false;
+        $this->authUser = $user;
+        $this->authId = $user['id'];
         return true;
+    }
+
+    public function credentialUser($token, $kind) {
+        if (!is_string($token) || !preg_match('/^[a-f0-9]{64}$/D', $token)) return false;
+        return $this->db->query("SELECT u.* FROM auth_credentials c JOIN users u ON u.id=c.userid
+            WHERE c.digest=UNHEX(?) AND c.kind=? AND c.expires>? AND u.active=1 AND u.banned=0",
+            hash('sha256', $token), $kind, time())->fetch(PDO::FETCH_ASSOC);
+    }
+
+    public function issueCredential($id, $kind) {
+        $token = bin2hex(random_bytes(32));
+        $this->db->query("INSERT INTO auth_credentials (digest,userid,kind,expires) VALUES (UNHEX(?),?,?,?)",
+            hash('sha256', $token), $id, $kind, time()+2592000);
+        return $token;
     }
 
     function loginUser($username, $password, $ban = true) {
@@ -87,46 +85,79 @@ class UserModel extends Model {
         $result = $query->fetch(\PDO::FETCH_ASSOC);
 
         if (!$result) return false;
-        if (!hash_check($password, $result['password'])) return false;
+        if (!verifyUserPassword($password, $result['password'])) return false;
         if ($ban and ($result['banned'])) return false;
         if (!$result['active']) return 'not-active|'.$result['id'];
-        $this->authId = $result['id'];
-        $this->authUser = $result;
-        session_put('user_logout', false);
-        $this->saveData($result['id'], $result['password']);
+        if (password_needs_rehash($result['password'], PASSWORD_DEFAULT)) {
+            $result['password'] = hashUserPassword($password);
+            $this->db->query("UPDATE users SET password=? WHERE id=?", $result['password'], $result['id']);
+        }
+        return $this->completeFirstFactor($result);
+    }
+
+    public function completeFirstFactor($user) {
+        if (!$user || !$user['active'] || $user['banned']) return false;
+        if ($user['two_factor_auth'] && config('allow-two-factor-authentication', true)) {
+            $this->logoutUser();
+            session_regenerate_id(true);
+            $_SESSION['pending_factor'] = $user['id'];
+            $this->sendTwoFactorLink($user['id'], $user['email'], $user['full_name']);
+            return 'challenge';
+        }
+        $this->loginWithObject($user);
         return true;
     }
 
     function loginWithObject($result) {
+        session_regenerate_id(true);
+        unset($_SESSION['pending_factor']);
         $this->authId = $result['id'];
         $this->authUser = $result;
-        session_put('user_logout', false);
-        $this->saveData($result['id'], $result['password']);
+        $this->saveData($result['id']);
     }
 
     function changePassword($new) {
-        $password = hash_value($new);
+        $password = hashUserPassword($new);
         $this->db->query("UPDATE users SET password=? WHERE id=? ", $password, $this->authId);
-        //refresh session data now
-        $this->saveData($this->authId, $password);
+        $this->db->query("DELETE FROM auth_credentials WHERE userid=?", $this->authId);
+        $this->saveData($this->authId);
     }
 
-    function saveData($id, $password) {
-        session_put("username", $id);
-        session_put("user_token", hash_value($password));
-        setcookie("username", $id, time() + 30 * 24 * 60 * 60, config('cookie_path'));
-        setcookie("user_token", hash_value($password), time() + 30 * 24 * 60 * 60, config('cookie_path'));//expired in one month and extend on every request
+    function saveData($id) {
+        $token = $this->issueCredential($id, 'browser');
+        $_SESSION['auth_token'] = $token;
+        $cookieOptions = array(
+            'expires' => time() + 30 * 24 * 60 * 60,
+            'path' => config('cookie_path'),
+            'secure' => config('https'),
+            'httponly' => true,
+            'samesite' => 'Lax'
+        );
+        setcookie('auth_token', $token, $cookieOptions);
     }
 
     function logoutUser() {
+        $token = $_SESSION['auth_token'] ?? $_COOKIE['auth_token'] ?? null;
+        if (is_string($token)) $this->db->query("DELETE FROM auth_credentials WHERE digest=UNHEX(?) AND kind='browser'", hash('sha256', $token));
+        unset($_SESSION['auth_token'], $_SESSION['pending_factor'], $_COOKIE['auth_token']);
+        $this->authId = null;
+        $this->authUser = null;
         unset($_SESSION['username']);
         unset($_SESSION['user_token']);
         unset($_COOKIE['username']);
         unset($_COOKIE['user_token']);
         session_put('user_logout', true);
         Hook::getInstance()->fire('user.logout');
-        setcookie("username", "", 1, config('cookie_path'));
-        setcookie("user_token", "", 1, config('cookie_path'));
+        $cookieOptions = array(
+            'expires' => 1,
+            'path' => config('cookie_path'),
+            'secure' => config('https'),
+            'httponly' => true,
+            'samesite' => 'Lax'
+        );
+        setcookie("auth_token", "", $cookieOptions);
+        setcookie("username", "", $cookieOptions);
+        setcookie("user_token", "", $cookieOptions);
     }
 
     function lists($type = 1, $term = '') {
@@ -165,7 +196,7 @@ class UserModel extends Model {
             $artist = 0;
         }
         $artist = $artist ? 2 : 1;
-        $password = hash_value($password);
+        $password = hashUserPassword($password);
         $active = config('email-activation', false) ? 0 : 1;
         if ($isAdmin) $active = 1;
         $query = $this->db->query("INSERT INTO users (username,password,email,full_name,user_type,date_created,active) VALUES(?,?,?,?,?,?,?)", $username,$password,$email,$full_name,$artist,time(), $active);
@@ -192,51 +223,55 @@ class UserModel extends Model {
         return $userid;
     }
 
-    public function socialSignup($details, $api = false) {
-        /**
-         * @var $username
-         * @var $password
-         * @var $full_name
-         * @var $email_address
-         * @var $authId
-         * @var $avatar
-         */
-        extract($details);
-        $query = $this->db->query("SELECT * FROM users WHERE facebookid=? OR email=? ", $authId, $email_address);
-        if ($query->rowCount() > 0) {
-            $user = $query->fetch(PDO::FETCH_ASSOC);
-            $userid = $user['id'];
-            $this->saveData($user['id'], $user['password']);
-            if ($api) return $user;
-            return $this->C->request->redirect(url());
-        } else {
-
-            $query = $this->db->query("INSERT INTO users (username,password,email,full_name,user_type,date_created,active,facebookid) VALUES(?,?,?,?,?,?,?,?)",
-                $username,$password,$email_address,$full_name,1,time(), 1, $authId);
-            $userid = $this->db->lastInsertId();
-
-            if($avatar) {
-               try{
-                   $uploader = new Uploader($avatar, 'image', false, true, true);
-                   if($uploader->passed()) {
-                       $uploader->setPath($userid.'/'.date('Y').'/photos/profile/');
-                       $avatar = $uploader->resize()->result();
-                       $this->db->query("UPDATE users SET avatar=? WHERE id=?", $avatar, $userid);
-                   }
-               } catch(Exception $e) {}
-            }
-            $user = $this->getUser($userid);
-            $this->saveData($user['id'], $user['password']);
-            $url = url();
-            if (config('enable-welcome', true)) {
-                $url = url('welcome');
-            }
-            if ($api) return $user;
-
-            return $this->C->request->redirect($url);
+    public function facebookLogin($profile, $allowLink = false) {
+        $subject = (string)$profile['id'];
+        $lock = 'facebook:'.substr(hash('sha256',$subject),0,48);
+        if (!(int)$this->db->query('SELECT GET_LOCK(?,5)',$lock)->fetchColumn()) return false;
+        try {
+            return $this->loginVerifiedFacebook($profile,$subject,$allowLink);
+        } finally {
+            $this->db->query('SELECT RELEASE_LOCK(?)',$lock);
         }
+    }
 
+    private function loginVerifiedFacebook($profile,$subject,$allowLink) {
+        $user = $this->db->query("SELECT * FROM users WHERE facebookid=?", $subject)->fetch(PDO::FETCH_ASSOC);
+        if ($user && $allowLink && $user['id'] != $this->authId) return false;
+        if (!$user) {
+            $email = $profile['email'] ?? '';
+            if (!$email || !filter_var($email, FILTER_VALIDATE_EMAIL)) return false;
+            $existing = $this->db->query("SELECT * FROM users WHERE email=?", $email)->fetch(PDO::FETCH_ASSOC);
+            if ($existing) {
+                if (!$allowLink || !$this->authId || $this->authId != $existing['id'] || !empty($existing['facebookid'])) return false;
+                $changed = $this->db->query("UPDATE users SET facebookid=? WHERE id=? AND (facebookid IS NULL OR facebookid='')", $subject, $existing['id']);
+                if (!$changed->rowCount()) return false;
+                $user = $existing;
+            } else {
+                $this->db->query("INSERT INTO users (username,password,email,full_name,user_type,date_created,active,facebookid) VALUES(?,?,?,?,1,?,1,?)",
+                    'fb_'.$subject, hashUserPassword(bin2hex(random_bytes(32))), $email, sanitizeText($profile['name'] ?? ''), time(), $subject);
+                $user = $this->getUser($this->db->lastInsertId());
+            }
+        }
+        return $this->completeFirstFactor($user);
+    }
 
+    private function issueChallenge($id, $purpose) {
+        $code = $purpose === 'factor' ? (string)random_int(10000000, 99999999) : bin2hex(random_bytes(32));
+        $this->db->query("REPLACE INTO auth_challenges (userid,purpose,digest,expires) VALUES (?,?,UNHEX(?),?)",
+            $id, $purpose, hash('sha256', $code), time()+($purpose === 'activation' ? 86400 : 900));
+        return $code;
+    }
+
+    public function challengeUser($id, $purpose, $code, $consume = true) {
+        if (!$id || !is_string($code) || $code === '') return false;
+        $digest = hash('sha256', $code);
+        $where = "userid=? AND purpose=? AND digest=UNHEX(?) AND expires>? AND attempts<5";
+        $query = $this->db->query(($consume ? "DELETE FROM" : "SELECT userid FROM")." auth_challenges WHERE ".$where, $id, $purpose, $digest, time());
+        if (!$query->rowCount()) {
+            if ($purpose === 'factor') $this->db->query("UPDATE auth_challenges SET attempts=attempts+1 WHERE userid=? AND purpose=? AND attempts<5", $id, $purpose);
+            return false;
+        }
+        return $this->db->query("SELECT * FROM users WHERE id=? AND banned=0", $id)->fetch(PDO::FETCH_ASSOC);
     }
 
     public function sendActivationLink($userid, $email, $full_name) {
@@ -244,11 +279,10 @@ class UserModel extends Model {
         $mailer->setAddress($email,$full_name);
         $mailer->setSubject(l('user-activation-subject'));
 
-        $hash = md5(time().rand(2,10000));
-        $link = url('activate/account', array('code' => $hash));
+        $hash = $this->issueChallenge($userid, 'activation');
+        $link = url('activate/account', array('id' => $userid, 'code' => $hash));
         $content = l('user-activation-content', array('name' => $full_name, 'link' => $link));
         $content = Hook::getInstance()->fire('email.content', $content, array('user-activation-content', array('name' => $full_name, 'link' => $link)));
-        $this->db->query("UPDATE users SET token=? WHERE id=? ", $hash, $userid);
         $mailer->setMessage($content);
         $mailer->send();
     }
@@ -258,12 +292,11 @@ class UserModel extends Model {
         $mailer->setAddress($email,$full_name);
         $mailer->setSubject(l('user-two-factor-auth-subject'));
 
-        $hash = uniqueKey(5, 5, false, false, $usenumbers = true,false);
+        $hash = $this->issueChallenge($userid, 'factor');
         $link = url('two/factor/auth', array('code' => $hash));
         $content = l('user-two-factor-auth-content', array('name' => $full_name, 'link' => $link, 'code' => $hash));
         $content = Hook::getInstance()->fire('email.content', $content, array('user-two-factor-auth-content', array('name' => $full_name, 'link' => $link, 'code' => $hash)));
 
-        $this->db->query("UPDATE users SET two_factor_auth=? WHERE id=? ", $hash, $userid);
         $mailer->setMessage($content);
         $mailer->send();
     }
@@ -273,23 +306,23 @@ class UserModel extends Model {
         $mailer->setAddress($user['email'],$user['full_name']);
         $mailer->setSubject(l('reset-your-password'));
 
-        $hash = md5(time().rand(2,10000));
-        $link = url('reset/password', array('code' => $hash));
+        $hash = $this->issueChallenge($user['id'], 'reset');
+        $link = url('reset/password', array('id' => $user['id'], 'code' => $hash));
         $content = l('user-reset-content', array('name' => $user['full_name'], 'link' => $link));
         $content = Hook::getInstance()->fire('email.content', $content, array('user-reset-content', array('name' => $user['full_name'], 'link' => $link)));
 
-        $this->db->query("UPDATE users SET token=? WHERE id=? ", $hash, $user['id']);
         $mailer->setMessage($content);
         $mailer->send();
     }
 
     public function resetPassword($password,$user) {
-        $password = hash_value($password);
+        $password = hashUserPassword($password);
+        $this->db->query("DELETE FROM auth_credentials WHERE userid=?", $user['id']);
         $this->db->query("UPDATE users SET password=?,token=? WHERE id=?", $password, '', $user['id']);
     }
 
     public function activateUser($code, $user) {
-        $this->db->query("UPDATE users SET active=?,token=? WHERE token=? ", 1,'', $code);
+        $this->db->query("UPDATE users SET active=?,token=? WHERE id=? ", 1,'', $user['id']);
         $this->sendWelcomeMail($user['email'], $user['full_name']);
         $this->loginWithObject($user);
         if (config('auto-follow-accounts')) {
@@ -301,10 +334,7 @@ class UserModel extends Model {
         }
     }
 
-    public function findUserWithCode($code) {
-        $query = $this->db->query("SELECT * FROM users WHERE token=?  OR two_factor_auth=?", $code,$code);
-        return $query->fetch(PDO::FETCH_ASSOC);
-    }
+
 
 
     public function sendWelcomeMail($email, $full_name) {
@@ -481,7 +511,7 @@ class UserModel extends Model {
     }
 
     public function getTotalTrackSize() {
-        if (config('enable-premium', false)) {
+        if ($this->authUser && config('enable-premium', false)) {
             $userType = $this->authUser['user_type'];
             if ($this->subscriptionActive()) {
                 if (config('pro-artist-total-track-size', 1024) == '-1') return 500000;
@@ -534,7 +564,7 @@ class UserModel extends Model {
     public function getTrackSize() {
 
         $size = config('audio-file-size', 55);
-        if (config('enable-premium', false)) {
+        if ($this->authUser && config('enable-premium', false)) {
             $userType = $this->authUser['user_type'];
             if ($this->subscriptionActive()) {
                 if ($userType == 1) {
@@ -784,8 +814,8 @@ class UserModel extends Model {
             $param[] = $userid;
         }
 
-        $sql .= " ORDER BY follow.fid DESC LIMIT {$limit} OFFSET {$offset} ";
-        $query = $this->db->query($sql, $param);
+        $sql .= " ORDER BY follow.fid DESC LIMIT ? OFFSET ? ";
+        $query = $this->db->query($sql, array_merge($param,[paginationNumber($limit,true), paginationNumber($offset,false)]));
         return $query->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -809,7 +839,7 @@ class UserModel extends Model {
             $followingIds[] = $this->authId;
             $blockIds = $this->blockIds();
             $followingIds = implode(',', $followingIds);
-            $query = $this->db->query("SELECT * FROM users WHERE id NOT IN ($followingIds) AND id NOT IN ($blockIds) AND avatar !=''  ORDER BY rand() LIMIT $limit OFFSET $offset");
+            $query = $this->db->query("SELECT * FROM users WHERE id NOT IN ($followingIds) AND id NOT IN ($blockIds) AND avatar !=''  ORDER BY rand() LIMIT ? OFFSET ?", paginationNumber($limit,true), paginationNumber($offset,false));
             return $query->fetchAll(PDO::FETCH_ASSOC);
         } elseif($type == 'top') {
 
@@ -832,8 +862,8 @@ class UserModel extends Model {
                 $param[] = $term;
             }
             $sql .= ($term == 'random') ? " ORDER BY rand() " : " ORDER BY count DESC";
-            $sql .= " LIMIT $limit OFFSET $offset ";
-            $query  = $this->db->query($sql, $param);
+            $sql .= " LIMIT ? OFFSET ? ";
+            $query  = $this->db->query($sql, array_merge($param,[paginationNumber($limit,true), paginationNumber($offset,false)]));
             return $query->fetchAll(PDO::FETCH_ASSOC);
         } elseif($type == 'people') {
             $blockIds = $this->blockIds();
@@ -849,16 +879,16 @@ class UserModel extends Model {
             }
 
             $sql .= " ORDER BY id DESC";
-            $sql .= " LIMIT $limit OFFSET $offset ";
-            $query  = $this->db->query($sql, $param);
+            $sql .= " LIMIT ? OFFSET ? ";
+            $query  = $this->db->query($sql, array_merge($param,[paginationNumber($limit,true), paginationNumber($offset,false)]));
             return $query->fetchAll(PDO::FETCH_ASSOC);
         }
     }
 
 
     public function getNotifications($offset = 0, $limit = 10) {
-        $query = $this->db->query("SELECT *,notifications.id as notifyid,notifications.time as notifytime FROM notifications LEFT JOIN users ON users.id=notifications.from_userid WHERE to_userid=? ORDER BY notifytime DESC LIMIT {$limit} OFFSET {$offset} ",
-            $this->C->model('user')->authId);
+        $query = $this->db->query("SELECT *,notifications.id as notifyid,notifications.time as notifytime FROM notifications LEFT JOIN users ON users.id=notifications.from_userid WHERE to_userid=? ORDER BY notifytime DESC LIMIT ? OFFSET ? ",
+            $this->C->model('user')->authId, paginationNumber($limit,true), paginationNumber($offset,false));
         $results = $query->fetchAll(PDO::FETCH_ASSOC);
         $formatResults = array();
         foreach($results as $result){
@@ -1005,8 +1035,21 @@ class UserModel extends Model {
         return config('currency', 'USD');
     }
 
+    public function getLandingArtists() {
+        $blockedIds = $this->blockIds();
+        $sql = "SELECT users.*, COALESCE(albums.total, 0) AS album_count
+                FROM users
+                LEFT JOIN (
+                    SELECT userid, COUNT(*) AS total FROM playlist
+                    WHERE playlist_type = 0 AND public = 1 GROUP BY userid
+                ) AS albums ON albums.userid = users.id
+                WHERE users.id NOT IN ($blockedIds) AND (users.user_type = 2 OR albums.total IS NOT NULL)
+                ORDER BY album_count DESC, users.id DESC LIMIT 12";
+        return $this->db->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+    }
+
     public function getRandomArtists($limit = 10) {
-        $query = $this->db->query("SELECT * FROM users WHERE user_type=? AND avatar!='' ORDER BY rand() LIMIT $limit", 2);
+        $query = $this->db->query("SELECT * FROM users WHERE user_type=? AND avatar!='' ORDER BY rand() LIMIT ?", 2, paginationNumber($limit,true));
         return $query->fetchAll(PDO::FETCH_ASSOC);
     }
 }

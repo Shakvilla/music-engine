@@ -1,0 +1,20 @@
+<?php
+$isDialog = !empty($isDialog);
+$signup = $mode === 'signup';
+$prefix = ($isDialog ? 'dialog-' : 'auth-').$mode;
+?>
+<div class="bc-auth-flow">
+    <div class="bc-auth-methods">
+        <h2 id="<?php echo $prefix?>-methods"><?php _l(config('user-signup', true) ? 'auth-join-or-login' : 'log-in')?></h2>
+        <?php echo $C->view('auth/social-login')?>
+        <button type="button" class="btn btn-primary bc-email-method" onclick="setAuthEmailStep(this, true)">
+            <i class="fa fa-envelope-o" aria-hidden="true"></i>
+            <?php _l('continue-with-email')?>
+        </button>
+    </div>
+    <div class="bc-auth-credentials">
+        <button type="button" class="bc-auth-back" onclick="setAuthEmailStep(this, false)">&#8592; <?php _l('back')?></button>
+        <h2 id="<?php echo $prefix?>-heading"><?php _l($signup ? 'create-account' : 'welcome-back')?></h2>
+        <?php echo $C->view('auth/'.$mode, array('isDialog'=>$isDialog))?>
+    </div>
+</div>

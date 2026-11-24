@@ -271,40 +271,7 @@ class Controller {
     }
 
     public function getFileUri($path, $http = true) {
-        $file = $path;
-        if (preg_match('#s3-#',$file)) {
-            $s3 = $this->model('track')->getS3();
-            $cmd = $s3->getCommand('GetObject', array(
-                'Bucket' => config('s3-bucket'),
-                'Key'    => 'uploads/tracks/'.$file
-            ));
-
-            $req = $s3->createPresignedRequest($cmd, '1 week');
-            $url = (string) $req->getUri();
-            return $url;
-
-        }
-
-        if (preg_match('#w3-#',$file)) {
-            $s3 = $this->model('track')->getWasabiS3();
-            $cmd = $s3->getCommand('GetObject', array(
-                'Bucket' => config('wasabi-bucket'),
-                'Key'    => 'uploads/tracks/'.$file
-            ));
-
-            $req = $s3->createPresignedRequest($cmd, '1 week');
-            $url = (string) $req->getUri();
-            return $url;
-
-        }
-
-        if (preg_match('#ftp-#', $file)) {
-            $endpoint = config('ftp-endpoint');
-            $file = str_replace('ftp-','', $file);
-            $middle = (config('ftp-path', '/') != '/') ? config('ftp-path') : '';
-            return $endpoint.$middle.'/'.$file;
-        }
-        return ($http) ? assetUrl($file) : $file;
+        return $this->model('track')->getFileUri($path, $http);
     }
 
     public function deleteFile($file) {

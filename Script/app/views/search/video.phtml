@@ -4,7 +4,7 @@
         <div class="main-loadmore-container" data-container="videos-list-container">
             <div
                 data-paginate-url="videos/paginate"
-                data-param="<?php echo perfectSerialize(array('type' => $type, 'typeId' => $typeid))?>"
+                data-param="<?php echo paginationState(array('type' => $type, 'typeId' => $typeid))?>"
                 id="videos-list-container"
                 class="videos-list-container " data-type="<?php echo $type?>" data-type-id="<?php echo $typeid?>" data-offset="0">
 

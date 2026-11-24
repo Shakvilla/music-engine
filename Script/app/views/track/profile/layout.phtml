@@ -99,7 +99,7 @@
                                                <a onclick="return showReportTrack(<?php echo $track['id']?>)" class="dropdown-item <?php echo ($track['public'] == 3) ? 'disabled':null?>" href="#"><i class="fa fa-flag"></i> <?php _l('report-copyright-infringment')?></a>
                                            <?php endif?>
                                            <?php if(model('user')->isLoggedIn() and $track['userid'] == $C->model('user')->authId):?>
-                                               <a  class="dropdown-item confirm" href="<?php echo url('track/delete', array('id' => $track['id']))?>"><i class="la la-trash"></i> <?php _l('delete-track')?></a>
+                                               <button type="button" class="dropdown-item confirm" data-post-url="<?php echo url('track/delete', array('id' => $track['id']))?>"><i class="la la-trash"></i> <?php _l('delete-track')?></button>
                                            <?php endif?>
 
                                            <a class="dropdown-item" data-ajax="true" href="<?php echo $C->model('track')->trackUrl($track,$track['id'])?>"><i class="la la-eye"></i> <?php _l('go-to-track')?></a>

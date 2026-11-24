@@ -86,6 +86,9 @@ function get_request_method()
 function path($path = "")
 {
     if(preg_match('#http#', $path)) return $path;
+    if (is_string($path) && preg_match('~^private-audio/([a-f0-9]{48}\.[a-z0-9]{1,8})$~D', $path,$match)) {
+        return dirname(rtrim(APP_BASE_PATH,'/')).'/musicengine-private/'.$match[1];
+    }
     $base = APP_BASE_PATH ;
     return $base . $path;
 }
@@ -321,7 +324,7 @@ function curl_get_content($url, $javascript_loop = 0, $timeout = 100)
     curl_setopt($ch, CURLOPT_MAXREDIRS, 10);
     $content = curl_exec($ch);
     $response = curl_getinfo($ch);
-    curl_close($ch);
+    // curl_close() is a no-op in PHP 8+ and deprecated as of PHP 8.5.
 
     return $content;
 }
@@ -610,11 +613,27 @@ function is_gif($path) {
 
 function hash_check($content, $hash)
 {
-    return (md5($content) == $hash);
+    return hash_equals(md5($content), (string) $hash);
 }
 
 function hash_value($content) {
     return md5($content);
+}
+
+function hashUserPassword($password) {
+    return password_hash($password, PASSWORD_DEFAULT);
+}
+
+function verifyUserPassword($password, $storedHash) {
+    $info = password_get_info($storedHash);
+    if (isset($info['algo']) && $info['algo'] !== null && $info['algo'] !== 0) {
+        return password_verify($password, $storedHash);
+    }
+
+    // Existing MusicEngine accounts stored a lowercase MD5 digest.
+    return is_string($storedHash)
+        && preg_match('/^[a-f0-9]{32}$/i', $storedHash)
+        && hash_equals(strtolower($storedHash), md5($password));
 }
 
 function config($key, $default = null)
@@ -659,6 +678,46 @@ function getMonths() {
         'december'
     );
 }
+function paginationState(array $values) {
+    return base64_encode(json_encode($values, JSON_THROW_ON_ERROR));
+}
+
+function readPaginationState($encoded, array $required = []) {
+    $invalid = function () {
+        http_response_code(400);
+        exit('Invalid pagination data');
+    };
+    if (!is_string($encoded) || strlen($encoded) > 8192) $invalid();
+    $raw = base64_decode($encoded, true);
+    $data = $raw === false ? null : json_decode($raw, true, 4);
+    if (!is_array($data) || array_diff($required, array_keys($data))) $invalid();
+    foreach ($data as $key => $value) {
+        if (!in_array($key, ['cid','type','typeId','limit','term','page','pageId'], true)) $invalid();
+        if (!is_string($value) && !is_int($value) && $value !== null) $invalid();
+        if ($key === 'limit') $data[$key] = paginationNumber($value, true);
+        if (is_string($value)) $data[$key] = $key === 'limit' ? $data[$key] : sanitizeText($value);
+    }
+    return $data;
+}
+
+function paginationNumber($value, $isLimit) {
+    if ((!is_string($value) && !is_int($value)) || !ctype_digit((string)$value) || strlen((string)$value) > 10) {
+        http_response_code(400);
+        exit('Invalid pagination number');
+    }
+    return min((int)$value, $isLimit ? 100 : 2147483647);
+}
+
+function csrfToken() {
+    return $_SESSION['csrf_token'] ??= bin2hex(random_bytes(32));
+}
+
+function requireMutationToken() {
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') { http_response_code(405); header('Allow: POST'); exit; }
+    $provided = $_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+    if (!is_string($provided) || !hash_equals(csrfToken(), $provided)) { http_response_code(403); exit; }
+}
+
 if(!function_exists('perfectSerialize')) {
     function perfectSerialize($string) {
         return base64_encode(serialize($string));

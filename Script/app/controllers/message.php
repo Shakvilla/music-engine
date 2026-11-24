@@ -83,7 +83,7 @@ class MessageController extends Controller {
     }
 
     public function paginate() {
-        $data = perfectUnserialize($this->request->input('data'));
+        $data = readPaginationState($this->request->input('data'), ['cid']);
         $cid = $data['cid'];
         $offset = $this->request->input('offset');
         $limit = 10;

@@ -1,0 +1,10 @@
+[Unit]
+Description=Back up MusicEngine database and media files
+Wants=network-online.target
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/musicengine
+Environment=BACKUP_DIR=/var/backups/musicengine
+ExecStart=/opt/musicengine/scripts/backup-production.sh

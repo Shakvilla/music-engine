@@ -10,9 +10,13 @@ use Money\Calculator\PhpCalculator;
  * Money Value Object.
  *
  * @author Mathias Verraes
+ *
+ * @psalm-immutable
  */
 final class Money implements \JsonSerializable
 {
+    use MoneyFactory;
+
     const ROUND_HALF_UP = PHP_ROUND_HALF_UP;
 
     const ROUND_HALF_DOWN = PHP_ROUND_HALF_DOWN;
@@ -56,8 +60,7 @@ final class Money implements \JsonSerializable
     ];
 
     /**
-     * @param int|string $amount   Amount, expressed in the smallest units of $currency (eg cents)
-     * @param Currency   $currency
+     * @param int|string $amount Amount, expressed in the smallest units of $currency (eg cents)
      *
      * @throws \InvalidArgumentException If amount is not integer
      */
@@ -77,25 +80,6 @@ final class Money implements \JsonSerializable
     }
 
     /**
-     * Convenience factory method for a Money object.
-     *
-     * <code>
-     * $fiveDollar = Money::USD(500);
-     * </code>
-     *
-     * @param string $method
-     * @param array  $arguments
-     *
-     * @return Money
-     *
-     * @throws \InvalidArgumentException If amount is not integer
-     */
-    public static function __callStatic($method, $arguments)
-    {
-        return new self($arguments[0], new Currency($method));
-    }
-
-    /**
      * Returns a new Money instance based on the current one using the Currency.
      *
      * @param int|string $amount
@@ -112,8 +96,6 @@ final class Money implements \JsonSerializable
     /**
      * Checks whether a Money has the same Currency as this.
      *
-     * @param Money $other
-     *
      * @return bool
      */
     public function isSameCurrency(Money $other)
@@ -123,8 +105,6 @@ final class Money implements \JsonSerializable
 
     /**
      * Asserts that a Money has the same currency as this.
-     *
-     * @param Money $other
      *
      * @throws \InvalidArgumentException If $other has a different currency
      */
@@ -138,8 +118,6 @@ final class Money implements \JsonSerializable
     /**
      * Checks whether the value represented by this object equals to the other.
      *
-     * @param Money $other
-     *
      * @return bool
      */
     public function equals(Money $other)
@@ -151,8 +129,6 @@ final class Money implements \JsonSerializable
      * Returns an integer less than, equal to, or greater than zero
      * if the value of this object is considered to be respectively
      * less than, equal to, or greater than the other.
-     *
-     * @param Money $other
      *
      * @return int
      */
@@ -166,13 +142,11 @@ final class Money implements \JsonSerializable
     /**
      * Checks whether the value represented by this object is greater than the other.
      *
-     * @param Money $other
-     *
      * @return bool
      */
     public function greaterThan(Money $other)
     {
-        return $this->compare($other) === 1;
+        return $this->compare($other) > 0;
     }
 
     /**
@@ -188,13 +162,11 @@ final class Money implements \JsonSerializable
     /**
      * Checks whether the value represented by this object is less than the other.
      *
-     * @param Money $other
-     *
      * @return bool
      */
     public function lessThan(Money $other)
     {
-        return $this->compare($other) === -1;
+        return $this->compare($other) < 0;
     }
 
     /**
@@ -231,30 +203,46 @@ final class Money implements \JsonSerializable
      * Returns a new Money object that represents
      * the sum of this and an other Money object.
      *
-     * @param Money $addend
+     * @param Money[] $addends
      *
      * @return Money
      */
-    public function add(Money $addend)
+    public function add(Money ...$addends)
     {
-        $this->assertSameCurrency($addend);
+        $amount = $this->amount;
+        $calculator = $this->getCalculator();
 
-        return new self($this->getCalculator()->add($this->amount, $addend->amount), $this->currency);
+        foreach ($addends as $addend) {
+            $this->assertSameCurrency($addend);
+
+            $amount = $calculator->add($amount, $addend->amount);
+        }
+
+        return new self($amount, $this->currency);
     }
 
     /**
      * Returns a new Money object that represents
      * the difference of this and an other Money object.
      *
-     * @param Money $subtrahend
+     * @param Money[] $subtrahends
      *
      * @return Money
+     *
+     * @psalm-pure
      */
-    public function subtract(Money $subtrahend)
+    public function subtract(Money ...$subtrahends)
     {
-        $this->assertSameCurrency($subtrahend);
+        $amount = $this->amount;
+        $calculator = $this->getCalculator();
 
-        return new self($this->getCalculator()->subtract($this->amount, $subtrahend->amount), $this->currency);
+        foreach ($subtrahends as $subtrahend) {
+            $this->assertSameCurrency($subtrahend);
+
+            $amount = $calculator->subtract($amount, $subtrahend->amount);
+        }
+
+        return new self($amount, $this->currency);
     }
 
     /**
@@ -267,10 +255,7 @@ final class Money implements \JsonSerializable
     private function assertOperand($operand)
     {
         if (!is_numeric($operand)) {
-            throw new \InvalidArgumentException(sprintf(
-                'Operand should be a numeric value, "%s" given.',
-                is_object($operand) ? get_class($operand) : gettype($operand)
-            ));
+            throw new \InvalidArgumentException(sprintf('Operand should be a numeric value, "%s" given.', is_object($operand) ? get_class($operand) : gettype($operand)));
         }
     }
 
@@ -290,12 +275,7 @@ final class Money implements \JsonSerializable
                 self::ROUND_HALF_POSITIVE_INFINITY, self::ROUND_HALF_NEGATIVE_INFINITY,
             ], true
         )) {
-            throw new \InvalidArgumentException(
-                'Rounding mode should be Money::ROUND_HALF_DOWN | '.
-                'Money::ROUND_HALF_EVEN | Money::ROUND_HALF_ODD | '.
-                'Money::ROUND_HALF_UP | Money::ROUND_UP | Money::ROUND_DOWN'.
-                'Money::ROUND_HALF_POSITIVE_INFINITY | Money::ROUND_HALF_NEGATIVE_INFINITY'
-            );
+            throw new \InvalidArgumentException('Rounding mode should be Money::ROUND_HALF_DOWN | '.'Money::ROUND_HALF_EVEN | Money::ROUND_HALF_ODD | '.'Money::ROUND_HALF_UP | Money::ROUND_UP | Money::ROUND_DOWN'.'Money::ROUND_HALF_POSITIVE_INFINITY | Money::ROUND_HALF_NEGATIVE_INFINITY');
         }
     }
 
@@ -348,8 +328,6 @@ final class Money implements \JsonSerializable
      * the remainder after dividing the value by
      * the given factor.
      *
-     * @param Money $divisor
-     *
      * @return Money
      */
     public function mod(Money $divisor)
@@ -361,8 +339,6 @@ final class Money implements \JsonSerializable
 
     /**
      * Allocate the money according to a list of ratios.
-     *
-     * @param array $ratios
      *
      * @return Money[]
      */
@@ -380,23 +356,30 @@ final class Money implements \JsonSerializable
             throw new \InvalidArgumentException('Cannot allocate to none, sum of ratios must be greater than zero');
         }
 
-        foreach ($ratios as $ratio) {
+        foreach ($ratios as $key => $ratio) {
             if ($ratio < 0) {
                 throw new \InvalidArgumentException('Cannot allocate to none, ratio must be zero or positive');
             }
-
             $share = $this->getCalculator()->share($this->amount, $ratio, $total);
-            $results[] = $this->newInstance($share);
+            $results[$key] = $this->newInstance($share);
             $remainder = $this->getCalculator()->subtract($remainder, $share);
         }
 
-        for ($i = 0; $this->getCalculator()->compare($remainder, 0) === 1; ++$i) {
-            if (!$ratios[$i]) {
-                continue;
-            }
+        if ($this->getCalculator()->compare($remainder, '0') === 0) {
+            return $results;
+        }
 
-            $results[$i]->amount = (string) $this->getCalculator()->add($results[$i]->amount, 1);
-            $remainder = $this->getCalculator()->subtract($remainder, 1);
+        $fractions = array_map(function ($ratio) use ($total) {
+            $share = ($ratio / $total) * $this->amount;
+
+            return $share - floor($share);
+        }, $ratios);
+
+        while ($this->getCalculator()->compare($remainder, '0') > 0) {
+            $index = !empty($fractions) ? array_keys($fractions, max($fractions))[0] : 0;
+            $results[$index]->amount = $this->getCalculator()->add($results[$index]->amount, '1');
+            $remainder = $this->getCalculator()->subtract($remainder, '1');
+            unset($fractions[$index]);
         }
 
         return $results;
@@ -425,8 +408,6 @@ final class Money implements \JsonSerializable
     }
 
     /**
-     * @param Money $money
-     *
      * @return string
      */
     public function ratioOf(Money $money)
@@ -492,7 +473,7 @@ final class Money implements \JsonSerializable
      */
     public function isPositive()
     {
-        return $this->getCalculator()->compare($this->amount, 0) === 1;
+        return $this->getCalculator()->compare($this->amount, 0) > 0;
     }
 
     /**
@@ -502,7 +483,7 @@ final class Money implements \JsonSerializable
      */
     public function isNegative()
     {
-        return $this->getCalculator()->compare($this->amount, 0) === -1;
+        return $this->getCalculator()->compare($this->amount, 0) < 0;
     }
 
     /**
@@ -510,12 +491,81 @@ final class Money implements \JsonSerializable
      *
      * @return array
      */
+    #[\ReturnTypeWillChange]
     public function jsonSerialize()
     {
         return [
             'amount' => $this->amount,
-            'currency' => $this->currency,
+            'currency' => $this->currency->jsonSerialize(),
         ];
+    }
+
+    /**
+     * @param Money $first
+     * @param Money ...$collection
+     *
+     * @return Money
+     *
+     * @psalm-pure
+     */
+    public static function min(self $first, self ...$collection)
+    {
+        $min = $first;
+
+        foreach ($collection as $money) {
+            if ($money->lessThan($min)) {
+                $min = $money;
+            }
+        }
+
+        return $min;
+    }
+
+    /**
+     * @param Money $first
+     * @param Money ...$collection
+     *
+     * @return Money
+     *
+     * @psalm-pure
+     */
+    public static function max(self $first, self ...$collection)
+    {
+        $max = $first;
+
+        foreach ($collection as $money) {
+            if ($money->greaterThan($max)) {
+                $max = $money;
+            }
+        }
+
+        return $max;
+    }
+
+    /**
+     * @param Money $first
+     * @param Money ...$collection
+     *
+     * @return Money
+     *
+     * @psalm-pure
+     */
+    public static function sum(self $first, self ...$collection)
+    {
+        return $first->add(...$collection);
+    }
+
+    /**
+     * @param Money $first
+     * @param Money ...$collection
+     *
+     * @return Money
+     *
+     * @psalm-pure
+     */
+    public static function avg(self $first, self ...$collection)
+    {
+        return $first->add(...$collection)->divide(func_num_args());
     }
 
     /**

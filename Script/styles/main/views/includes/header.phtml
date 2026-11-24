@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
+    <meta name="csrf-token" content="<?php echo csrfToken()?>" data-routes='<?php echo json_encode(Request::MUTATIONS)?>'>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <meta name="description" content="<?php echo $description?>">
@@ -20,7 +21,9 @@
     <?php if(getController()->useEditor):?>
         <link href="https://cdnjs.cloudflare.com/ajax/libs/summernote/0.8.9/summernote-bs4.css" rel="stylesheet">
     <?php endif?>
-    <link href="<?php echo assetUrl('styles/main/css/main.css')?>?time=<?php echo fileatime(path('styles/main/css/main.css'))?>" rel="stylesheet">
+    <link href="<?php echo assetUrl('styles/main/css/main.css')?>?time=<?php echo filemtime(path('styles/main/css/main.css'))?>" rel="stylesheet">
+    <link href="<?php echo assetUrl('styles/main/css/home.css')?>?v=<?php echo filemtime(path('styles/main/css/home.css'))?>" rel="stylesheet">
+    <link href="<?php echo assetUrl('styles/main/css/auth.css')?>?v=<?php echo filemtime(path('styles/main/css/auth.css'))?>" rel="stylesheet">
     <?php echo $header_content?>
     <meta name="twitter:card" content="<?php echo config('site-title')?>" />
     <meta property="twitter:site" content="<?php echo url()?>">
@@ -43,6 +46,10 @@
     ?>
     <?php if(file_exists($colors)): $colors = include $colors?>
         <style>
+            :root {
+                --auth-theme-button: <?php echo config($theme.'-button-primary', $colors['buttons']['colors']['button-primary']['color'] ?? '#00b263')?>;
+                --auth-theme-button-text: <?php echo config($theme.'-button-color', $colors['buttons']['colors']['button-color']['color'] ?? '#fff')?>;
+            }
             <?php foreach($colors as $segment => $info):?>
             <?php foreach($info['colors']  as $id => $detail):?>
             <?php echo $detail['target']?>{

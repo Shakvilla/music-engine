@@ -34,7 +34,9 @@ class Database {
          * Try make connection to the database
          */
         try {
-            $this->db = new \PDO("{$this->driver}:host={$this->host};dbname={$this->dbName}", $this->username, $this->password);
+            $port = $databaseDetails['db_port'] ?: $databaseDetails['port'];
+            $portDsn = $port ? ";port={$port}" : '';
+            $this->db = new \PDO("{$this->driver}:host={$this->host}{$portDsn};dbname={$this->dbName}", $this->username, $this->password);
             $this->db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
             if (config('dbcharacter_encode', false)) {
                 $this->db->query("SET NAMES 'utf8'");
@@ -64,7 +66,11 @@ class Database {
         }
 
         $response = $this->db->prepare($query);
-        $response->execute($args);
+        foreach ($args as $index => $value) {
+            $type = is_int($value) ? PDO::PARAM_INT : ($value === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+            $response->bindValue(is_int($index) ? $index + 1 : $index, $value, $type);
+        }
+        $response->execute();
 
         return $response;
     }

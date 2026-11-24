@@ -1,2 +1,10 @@
 HOW-TO-UPDATE
+Script/uploads/tmp/
 documentation
+.env
+.env.*
+!.env.example
+!.env.production.example
+backups/
+/Script/uploads/**
+!/Script/uploads/index.html

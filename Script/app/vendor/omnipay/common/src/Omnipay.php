@@ -50,7 +50,7 @@ use Omnipay\Common\Http\ClientInterface;
  * @method static \Omnipay\Common\GatewayInterface create(string $class, ClientInterface $httpClient = null, \Symfony\Component\HttpFoundation\Request $httpRequest = null)
  * @codingStandardsIgnoreEnd
  *
- * @see Omnipay\Common\GatewayFactory
+ * @see \Omnipay\Common\GatewayFactory
  */
 class Omnipay
 {
@@ -83,7 +83,7 @@ class Omnipay
      *
      * @param GatewayFactory $factory A GatewayFactory instance
      */
-    public static function setFactory(GatewayFactory $factory = null)
+    public static function setFactory(?GatewayFactory $factory = null)
     {
         self::$factory = $factory;
     }

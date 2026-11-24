@@ -13,16 +13,25 @@ class UrlSigner
     private $signer;
 
     /**
-     * @param $keyPairId  string ID of the key pair
-     * @param $privateKey string Path to the private key used for signing
+     * @param string     $keyPairId  ID of the key pair.
+     * @param string     $privateKey Path to the private key used for signing,
+     *                               or a PEM-encoded key string.
+     * @param int|string $algorithm  Signing hash algorithm. Accepts either an
+     *                               OpenSSL constant (OPENSSL_ALGO_SHA1,
+     *                               OPENSSL_ALGO_SHA256) or the canonical name
+     *                               string ("SHA1", "SHA256"). Defaults to SHA1.
      *
-     * @throws \RuntimeException if the openssl extension is missing
-     * @throws \InvalidArgumentException if the private key cannot be found.
+     * @throws \RuntimeException if the openssl extension is missing.
+     * @throws \InvalidArgumentException if the private key cannot be found,
+     *                                   the key type is not supported by
+     *                                   CloudFront (RSA or ECDSA P-256), or
+     *                                   the requested algorithm is not supported.
      */
-    public function __construct($keyPairId, $privateKey)
+    public function __construct($keyPairId, $privateKey, $algorithm = Signer::DEFAULT_ALGORITHM)
     {
-        $this->signer = new Signer($keyPairId, $privateKey);
+        $this->signer = new Signer($keyPairId, $privateKey, '', $algorithm);
     }
+
 
     /**
      * Create a signed Amazon CloudFront URL.
@@ -57,14 +66,14 @@ class UrlSigner
         // Get the real scheme by removing wildcards from the scheme
         $scheme = str_replace('*', '', $urlSections[0]);
         $uri = new Uri($scheme . '://' . $urlSections[1]);
-        $query = Psr7\parse_query($uri->getQuery(), PHP_QUERY_RFC3986);
+        $query = Psr7\Query::parse($uri->getQuery(), PHP_QUERY_RFC3986);
         $signature = $this->signer->getSignature(
             $this->createResource($scheme, (string) $uri),
             $expires,
             $policy
         );
         $uri = $uri->withQuery(
-            http_build_query($query + $signature, null, '&', PHP_QUERY_RFC3986)
+            http_build_query($query + $signature, '', '&', PHP_QUERY_RFC3986)
         );
 
         return $scheme === 'rtmp'
@@ -101,7 +110,7 @@ class UrlSigner
                 $parts = parse_url($url);
                 $pathParts = pathinfo($parts['path']);
                 $resource = ltrim(
-                    $pathParts['dirname'] . '/' . $pathParts['basename'],
+                    str_replace('\\', '/', $pathParts['dirname']) . '/' . $pathParts['basename'],
                     '/'
                 );
 

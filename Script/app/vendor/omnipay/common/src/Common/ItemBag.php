@@ -11,14 +11,12 @@ namespace Omnipay\Common;
  * This class defines a bag (multi element set or array) of single cart items
  * in the Omnipay system.
  *
- * @see Item
  */
 class ItemBag implements \IteratorAggregate, \Countable
 {
     /**
      * Item storage
      *
-     * @see Item
      *
      * @var array
      */
@@ -37,7 +35,6 @@ class ItemBag implements \IteratorAggregate, \Countable
     /**
      * Return all the items
      *
-     * @see Item
      *
      * @return array An array of items
      */
@@ -49,7 +46,6 @@ class ItemBag implements \IteratorAggregate, \Countable
     /**
      * Replace the contents of this bag with the specified items
      *
-     * @see Item
      *
      * @param array $items An array of items
      */
@@ -65,7 +61,6 @@ class ItemBag implements \IteratorAggregate, \Countable
     /**
      * Add an item to the bag
      *
-     * @see Item
      *
      * @param ItemInterface|array $item An existing item, or associative array of item parameters
      */
@@ -83,7 +78,7 @@ class ItemBag implements \IteratorAggregate, \Countable
      *
      * @return \ArrayIterator An \ArrayIterator instance
      */
-    public function getIterator()
+    public function getIterator(): \Traversable
     {
         return new \ArrayIterator($this->items);
     }
@@ -93,7 +88,7 @@ class ItemBag implements \IteratorAggregate, \Countable
      *
      * @return int The number of items
      */
-    public function count()
+    public function count(): int
     {
         return count($this->items);
     }

@@ -1,28 +1,24 @@
-<div class="title clearfix">
-    <div class="float-left">
-        <a data-ajax="true" href="<?php echo url('store/browse', array('which' => 'tracks'))?>"  class="btn btn-sm mr-2 <?php echo $which == 'tracks' ? 'btn-primary' : 'btn-secondary'?>">
-            <?php _l('tracks')?>
-        </a>
-
-        <a data-ajax="true" href="<?php echo url('store/browse', array('which' => 'albums'))?>"  class="btn btn-sm <?php echo $which == 'albums'? 'btn-primary' : 'btn-secondary'?>">
-            <?php _l('albums')?>
-        </a>
-    </div>
-    <div class="float-right">
-        <?php if($which == 'tracks'):?>
-            <div style="position: relative;margin-right: 20px;">
-                <select onchange="load_store_browse(this, '<?php echo $which?>')" id="filter-genre"  class="select-input" data-ui-select="true" style="width:200px;right:25px">
-                    <option value="all"><?php _l('all-genres')?></option>
-                    <?php foreach($C->model('admin')->getGenres() as $dgenre):?>
-                        <option <?php echo ($genre == $dgenre['id']) ? 'selected' : null?>  value="<?php echo $dgenre['id']?>"><?php echo $dgenre['name']?></option>
-                    <?php endforeach;?>
-                </select>
-            </div>
+<section class="bc-market bc-market-browse">
+    <div class="bc-market-toolbar">
+        <nav class="bc-market-switch" aria-label="<?php _l('browse')?>">
+            <?php foreach (array('tracks', 'albums') as $section):?>
+                <a data-ajax="true" href="<?php echo url('store/browse', array('which' => $section))?>" <?php if ($which === $section):?>aria-current="page"<?php endif?>>
+                    <?php _l($section)?>
+                </a>
+            <?php endforeach?>
+        </nav>
+        <?php if ($which === 'tracks'):?>
+            <select onchange="load_store_browse(this, 'tracks')" id="filter-genre" aria-label="<?php _l('genre')?>">
+                <option value="all"><?php _l('all-genres')?></option>
+                <?php foreach ($C->model('admin')->getGenres() as $item):?>
+                    <option value="<?php echo (int)$item['id']?>" <?php if ($genre == $item['id']):?>selected<?php endif?>>
+                        <?php echo htmlspecialchars($item['name'], ENT_QUOTES, 'UTF-8')?>
+                    </option>
+                <?php endforeach?>
+            </select>
         <?php endif?>
     </div>
-</div>
-
-<div class="inline-grid inline-grid-full">
-    <div class="track-list grid-container" data-view="inline-grid" data-type-id="<?php echo $which.'-'.$genre?>" data-type="store-browse" data-offset="0">
+    <div class="inline-grid">
+        <div class="track-list grid-container" data-view="inline-grid" data-type-id="<?php echo htmlspecialchars($which.'-'.$genre, ENT_QUOTES, 'UTF-8')?>" data-type="store-browse" data-offset="0"></div>
     </div>
-</div>
+</section>

@@ -9,6 +9,7 @@ use Omnipay\Mollie\Message\Response\CompletePurchaseResponse;
  * Retrieve a single payment object by its payment token.
  *
  * @see https://docs.mollie.com/reference/v2/payments-api/get-payment
+ * @method CompletePurchaseResponse send()
  */
 class CompletePurchaseRequest extends FetchTransactionRequest
 {

@@ -12,7 +12,7 @@ class UserController extends Controller {
             case 'delete':
 
                 if ($password = $this->request->input('password')) {
-                    if (!hash_check($password, $this->model('user')->authUser['password'])) {
+                    if (!verifyUserPassword($password, $this->model('user')->authUser['password'])) {
                         return json_encode(array(
                             'type' => 'error',
                             'message' => l('wrong-current-password')
@@ -58,7 +58,7 @@ class UserController extends Controller {
                      * @var $confirm
                      */
                     extract($val);
-                    if (!hash_check($current, $this->model('user')->authUser['password'])) {
+                    if (!verifyUserPassword($current, $this->model('user')->authUser['password'])) {
                         return json_encode(array(
                             'type' => 'error',
                             'message' => l('wrong-current-password')
@@ -282,7 +282,7 @@ class UserController extends Controller {
     }
 
     public function paginateArtists() {
-        $data = perfectUnserialize($this->request->input('data'));
+        $data = readPaginationState($this->request->input('data'), []);
         $offset = $this->request->input('offset');
         $dLimit = (isset($data['limit'])) ? $data['limit'] : 20;
         $type = (isset($data['type'])) ? $data['type'] : 'top';
@@ -313,7 +313,7 @@ class UserController extends Controller {
     }
 
     public function notificationPaginate() {
-        $data = perfectUnserialize($this->request->input('data'));
+        $data = readPaginationState($this->request->input('data'), []);
         $offset = $this->request->input('offset');
         $dLimit = (isset($data['limit'])) ? $data['limit'] : 20;
         $limit = $dLimit*2;
@@ -378,8 +378,8 @@ class UserController extends Controller {
 
         $this->setLayout("includes/plain-layout");
         if ($code) {
-            $user = $this->model('user')->findUserWithCode($code);
-            if ($user) {
+            $user = $this->model('user')->challengeUser($_SESSION['pending_factor'] ?? null, 'factor', $code);
+            if ($user && $user['active']) {
                 model('user')->loginWithObject($user);
                 $url = url();
                 return $this->request->redirect($url);
@@ -387,7 +387,7 @@ class UserController extends Controller {
                 $message = l('code-expired');
             }
         }
-        if ($userid) {
+        if ($userid && $userid == ($_SESSION['pending_factor'] ?? null)) {
 
             $user = $this->model('user')->getUser($userid);
             if (!$user) return $this->request->redirect(url());
@@ -404,7 +404,7 @@ class UserController extends Controller {
         $message = null;
 
         if ($code) {
-            $user = $this->model('user')->findUserWithCode($code);
+            $user = $this->model('user')->challengeUser($this->request->input('id'), 'activation', $code);
             if ($user) {
                 $this->model('user')->activateUser($code, $user);
                 $url = url();
@@ -453,7 +453,7 @@ class UserController extends Controller {
         $this->setLayout("includes/plain-layout");
         $code = $this->request->input('code');
 
-        $user = $this->model('user')->findUserWithCode($code);
+        $user = $this->model('user')->challengeUser($this->request->input('id'), 'reset', $code, false);
         if (!$code or !$user) {
             exit(l('code-expired'));
         }
@@ -473,15 +473,16 @@ class UserController extends Controller {
                     'type' => 'error'
                 ));
             }
+            if (!$this->model('user')->challengeUser($user['id'], 'reset', $code)) exit(l('code-expired'));
             $this->model('user')->resetPassword($password,$user);
-            $this->model('user')->loginUser($user['username'], $password, true);
+            $login = $this->model('user')->loginUser($user['username'], $password, true);
             return json_encode(array(
                 'message' => l('password-changed'),
                 'type' => 'normal-url',
-                'value' => url()
+                'value' => $login === 'challenge' ? url('two/factor/auth', ['id'=>$user['id']]) : url()
             ));
         }
-        return $this->render($this->view('user/reset'));
+        return $this->render($this->view('auth/screen', array('heading'=>'choose-new-password', 'content'=>$this->view('user/reset'))));
     }
 
     public function userSuggests() {

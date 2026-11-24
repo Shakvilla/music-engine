@@ -26,7 +26,7 @@ class Crc32ValidatingParser extends AbstractParser
         ResponseInterface $response
     ) {
         if ($expected = $response->getHeaderLine('x-amz-crc32')) {
-            $hash = hexdec(Psr7\hash($response->getBody(), 'crc32b'));
+            $hash = hexdec(Psr7\Utils::hash($response->getBody(), 'crc32b'));
             if ($expected != $hash) {
                 throw new AwsException(
                     "crc32 mismatch. Expected {$expected}, found {$hash}.",
@@ -46,8 +46,9 @@ class Crc32ValidatingParser extends AbstractParser
 
     public function parseMemberFromStream(
         StreamInterface $stream,
-        StructureShape $member
+        StructureShape $member,
+        $response
     ) {
-        return $this->parser->parseMemberFromStream($stream, $member);
+        return $this->parser->parseMemberFromStream($stream, $member, $response);
     }
 }

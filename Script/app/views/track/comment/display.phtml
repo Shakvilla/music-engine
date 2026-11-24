@@ -43,7 +43,7 @@
 
     <div
         data-paginate-url="comment/paginate"
-        data-param="<?php echo perfectSerialize(array('type' => $type, 'typeId' => $typeId))?>"
+        data-param="<?php echo paginationState(array('type' => $type, 'typeId' => $typeId))?>"
         id="comments-<?php echo $type?>-<?php echo $typeId?>"
         <?php echo ($type == 'comment') ? 'data-loaded="true"':null?> class="comments-container  comments-container-<?php echo $type?>-<?php echo $typeId?>" data-type="<?php echo $type?>" data-type-id="<?php echo $typeId?>" data-offset="0">
         <?php if($type == 'comment'):$comments = $C->model('track')->getComments($type, $typeId, 0)?>

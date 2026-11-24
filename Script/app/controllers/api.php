@@ -6,20 +6,27 @@ class ApiController extends Controller {
 
     public function __construct($request = null) {
         parent::__construct($request);
-        $apiKey = config('api-access-key', 'o0q0aOmm4M0JEA');
+        $apiKey = config('api-access-key', '');
         $providedKey = $this->request->segment(1);
-        if ($apiKey != $providedKey) return json_encode(array('status' => 0));
+        if (!$apiKey || !is_string($providedKey) || !hash_equals($apiKey, $providedKey)) {
+            http_response_code(403);
+            exit(json_encode(['status' => 0]));
+        }
         header('Access-Control-Allow-Origin: http://localhost:9080');
     }
 
     private function userAuth($force = true) {
         $this->userid = $this->request->input('userid');
         $key = $this->request->input('key');
-        $this->user = $this->model('user')->getUser($this->userid);
-        if ($this->user and $this->model('api')->userKeyExists($this->userid, $key)) {
-            $this->model('user')->loginWithObject($this->user);
+        $model = $this->model('user');
+        $this->user = $model->credentialUser($key, 'mobile');
+        if ($this->user && (string)$this->user['id'] === (string)$this->userid) {
+            $model->authId = $this->user['id'];
+            $model->authUser = $this->user;
         } else {
-            $this->model('user')->logoutUser();
+            $this->user = null;
+            $model->authUser = null;
+            $model->authId = null;
             if ($force) exit(json_encode(array('status' => 0)));
         }
     }
@@ -53,83 +60,31 @@ class ApiController extends Controller {
     public function login() {
         $username = $this->request->input('username');
         $password = $this->request->input('password');
-        $platform = $this->request->input('device');
-        if ($this->model('user')->loginUser($username, $password, true)) {
-            $this->userid = $this->model('user')->authId;
-            $this->user = $this->model('user')->authUser;
-            return json_encode(array_merge(array(
-                'status' => 1,
-                'key'  => $this->model('api')->generateKey($this->userid,$platform)
-            ), $this->model('api')->formatUser($this->user, true)));
-        } else {
-            return json_encode(array('status' => 0));
-        }
+        return $this->loginResponse($this->model('user')->loginUser($username, $password, true));
+    }
+
+    private function loginResponse($login) {
+        if ($login === 'challenge') return json_encode(['status' => 2, 'challenge' => 'second_factor']);
+        if ($login !== true) return json_encode(['status' => 0]);
+        $user = $this->model('user')->authUser;
+        return json_encode(array_merge($this->model('api')->formatUser($user, true), [
+            'status' => 1, 'key' => $this->model('user')->issueCredential($user['id'], 'mobile'),
+        ]));
+    }
+
+    public function completeFactor() {
+        $user = $this->model('user')->challengeUser($_SESSION['pending_factor'] ?? null, 'factor', $this->request->input('code'));
+        if (!$user || !$user['active']) return $this->loginResponse(false);
+        $this->model('user')->loginWithObject($user);
+        return $this->loginResponse(true);
     }
 
     public function socialSignup() {
-        $fbId = $this->request->input('fbid');
-        $username = 'fb_'.$fbId;
-        $username = str_replace(array(' ', '.', '-'), array('', '', ''), $username);
-        $email  = $this->request->input('email');
-        $details = array(
-            'username' => $username,
-            'full_name' => $this->request->input('full_name'),
-            'email' => ($email) ? $email : 'fb_'.$fbId.'@facebook.com',
-            'email_address' => ($email) ? $email : 'fb_'.$fbId.'@facebook.com',
-            'social_email' => 'fb_'.$fbId.'@facebook.com',
-            'password' => time(),
-            'auth' => 'facebook',
-            'authId' => $fbId,
-            'avatar' => ''
-        );
-        $platform = $this->request->input('device');
-        try {
-            $url = 'https://graph.facebook.com/'.$fbId.'/picture?redirect=false&width=600&height=600';
-            $ch = curl_init();
-            $headers = array(
-                'Referer: https://www.google.com.ng/_/chrome/newtab-serviceworker.js',
-                'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.59 Safari/537.36'
-            );
-            curl_setopt($ch, CURLOPT_URL, $url);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "GET");
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-            if(!ini_get('open_basedir')) {
-                curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
-            }
-            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
-            $contents = curl_exec($ch);
-            curl_close($ch);
-            $avatar = json_decode($contents, true);
-            if($avatar and isset($avatar['data']['url'])) {
-                $avatar = $avatar['data']['url'];
-                $details['avatar'] = $avatar;
-            }
-        } catch(\Exception $e) {
-        }
-
-        $validator = Validator::getInstance()->scan($details, array(
-            'full_name' => 'required',
-            'username' => 'required|username|predefined',
-            'password' => 'required',
-            'email' => 'required|email'
-        ));
-        if ($validator->passes()) {
-            $user =  $this->model('user')->socialSignup($details, true);
-            $this->userid = $user['id'];
-            $this->user = $user;
-            return json_encode(array_merge(array(
-                'status' => 1,
-                'key'  => $this->model('api')->generateKey($this->userid,$platform)
-            ), $this->model('api')->formatUser($this->user, true)));
-        } else {
-            return json_encode(array(
-                'message' => $validator->first(),
-                'status' => 0
-            ));
-        }
-
+        require_once path('app/vendor/classes/facebookidentity.php');
+        $profile = FacebookIdentity::verify($_POST['access_token'] ?? '');
+        $link = ($_POST['link_account'] ?? '') === '1';
+        if ($link) $this->userAuth();
+        return $this->loginResponse($profile ? $this->model('user')->facebookLogin($profile,$link) : false);
     }
 
     public function signup() {
@@ -170,7 +125,7 @@ class ApiController extends Controller {
             $this->user = $this->model('user')->authUser;
             return json_encode(array_merge(array(
                 'status' => 1,
-                'key'  => $this->model('api')->generateKey($this->userid,$platform)
+                'key'  => $this->model('user')->issueCredential($this->userid, 'mobile')
             ), $this->model('api')->formatUser($this->user, true)));
         } else {
             return json_encode(array(
@@ -200,30 +155,12 @@ class ApiController extends Controller {
         $offset = $this->request->input('offset');
         $limit = ($this->request->input('limit')) ? $this->request->input('limit') : config('tracks-limit', 10);
         $tracks = $this->model('track')->getTracks($type, $typeId, $offset,$limit);
-        $result = array();
-        foreach($tracks as $track) {
-            $track = $this->model('api')->formatTrack($track, $type, $typeId);
-            if ($track) $result[] = $track;
-        }
-
-        return json_encode($result);
+        return json_encode($this->model('api')->formatTrackPage($tracks, $type, $typeId));
     }
 
     public function activatePro() {
-        $this->userAuth();
-        $type = $this->request('type');
-        $price = $this->request('price');
-        $this->model('admin')->addTransaction(array(
-            'amount' =>  $price,
-            'type' => 'pro-users',
-            'type_id' => $type,
-            'sale_id' => time(),
-            'name' => $this->model('user')->authUser['full_name'],
-            'country' => $this->model('user')->authUser['country'],
-            'email' => $this->model('user')->authUser['email'],
-            'userid' => $this->model('user')->authId
-        ));
-        return json_encode(array('status' => 1));
+        http_response_code(403);
+        return json_encode(['status' => 0, 'message' => 'Verified payment required']);
     }
 
     public function getGenres() {
@@ -390,25 +327,12 @@ class ApiController extends Controller {
     public function getTrackDownloadDetail() {
         $this->userAuth(false);
         $track = $this->model('track')->findTrack($this->request->input('id'));
-        $file = $this->getFileUri($track['track_file'], false);
-        $url = $this->getFileUri($track['track_file'], true);
-        $result = array(
-            'url' => $url,
-            'name' => ''
-        );
-
-        if (preg_match('#http#', $file)) {
-            //we need to download first to a local place and delete when done
-            $ext = getMimeTypeExtension(getMimeType($file));
-            $ext = ($ext) ? $ext : 'mp3';
-            $filename = md5($track['title']).'.'.$ext;
-
-        } else{
-            $ext = get_file_extension($file);
-            $ext = ($ext) ? $ext : 'mp3';
-            $filename = md5($track['title']).'.'.$ext;
-        }
-        $result['name'] = $filename;
+        if (!$track || !$this->model('track')->canDownload($track)) { http_response_code(403); return json_encode(['status' => 0]); }
+        $extension = get_file_extension($track['track_file']) ?: 'mp3';
+        $result = [
+            'url' => $this->model('media')->ticket($track,'download'),
+            'name' => md5($track['title']).'.'.$extension,
+        ];
         return json_encode($result);
 
     }
@@ -578,11 +502,11 @@ class ApiController extends Controller {
 
     public function listMessages() {
         $this->userAuth();
-        $conversations = $this->model('message')->getConversations();
+        $conversations = $this->model('message')->getConversations($this->request->input('offset', 0), $this->request->input('limit', 25));
         $result = array();
         foreach($conversations as $conversation) {
             $conversation['user'] = $this->model('api')->formatUser($conversation['user']);
-            $message = model('message')->getLastMessage($conversation['id']);
+            $message = $conversation['lastMessage'];
             $message['chattime'] = date('c', $message['time']);
             $conversation['message'] = $message;
             $result[] = $conversation;
@@ -689,6 +613,8 @@ class ApiController extends Controller {
         if ($type == 'pro-users' and !config('enable-premium-listeners', false)) $type = 'pro';
         $this->userAuth();
 
+        $this->model('user')->loginWithObject($this->user);
+        $price = $this->model('order')->create($type, $typeId);
         session_put("about-pay-type", $type);
         session_put('about-pay-typeid', $typeId);
         session_put("about-pay-price", $price);

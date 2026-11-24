@@ -513,26 +513,24 @@ class AdminModel extends Model {
         return $query->rowCount();
     }
 
-    public function saveBankTransfer($val) {
-        /**
-         * @var $file
-         * @var $type
-         * @var $typeid
-         * @var $price
-         */
-        extract($val);
-        if (!$this->transferIsAvailable($type,$typeid)) {
-            $price = convertBackToBase($price);
-            $this->db->query("INSERT INTO bank_transfers (userid,type,typeid,price,file)VALUES(?,?,?,?,?)",
-                model('user')->authId, $type, $typeid, $price, $file);
-            return json_encode(array(
-                'type' => 'modal-function',
-                'message' => l('bank-receipt-uploaded-success'),
-                'modal' => '#bankTransferModal'
-            ));
-        } else  {
-            return json_encode(array('type' => 'error', 'message' => l('you-already-uploaded-receipt')));
+    public function saveBankTransfer($order, $file) {
+        $this->db->query('START TRANSACTION');
+        try {
+            $changed = $this->db->query("UPDATE checkout_orders SET state='review' WHERE id=? AND provider='bank' AND state='pending'", $order['id']);
+            if (!$changed->rowCount() || $this->transferIsAvailable($order['item_type'], $order['item_id'])) {
+                $this->db->query('ROLLBACK');
+                return json_encode(['type'=>'error','message'=>l('you-already-uploaded-receipt')]);
+            }
+            $this->db->query('INSERT INTO bank_transfers (userid,type,typeid,price,file) VALUES(?,?,?,?,?)',
+                $order['userid'], $order['item_type'], $order['item_id'], $order['base_price'], $file);
+            $receipt = $this->db->lastInsertId();
+            $this->db->query('UPDATE checkout_orders SET reference_id=? WHERE id=?', $receipt, $order['id']);
+            $this->db->query('COMMIT');
+        } catch (Throwable $error) {
+            $this->db->query('ROLLBACK');
+            throw $error;
         }
+        return json_encode(['type'=>'modal-function','message'=>l('bank-receipt-uploaded-success'),'modal'=>'#bankTransferModal']);
     }
 
     public function transferIsAvailable($type,$typeid) {
@@ -553,25 +551,46 @@ class AdminModel extends Model {
     }
 
     public function doBankAction($id, $action) {
-        $details = $this->findBankRequest($id);
-        $user = model('user')->getUser($details['userid']);
-        if ($action == 'delete') {
-            model('user')->addNotification($user['id'], 'bank-transfer-cancel');
-        } else {
+        if (!in_array($action, ['delete','approve'], true)) { http_response_code(400); return; }
+        $this->db->query('START TRANSACTION');
+        try {
+            $details = $this->db->query('SELECT * FROM bank_transfers WHERE id=? FOR UPDATE',$id)->fetch(PDO::FETCH_ASSOC);
+            if (!$details) { $this->db->query('COMMIT'); return; }
+            $order = $this->db->query("SELECT * FROM checkout_orders WHERE provider='bank' AND state='review' AND reference_id=? AND userid=? FOR UPDATE",
+                $id, $details['userid'])->fetch(PDO::FETCH_ASSOC);
+            if (!$order && $action === 'approve') {
+                $this->db->query('ROLLBACK');
+                http_response_code(409);
+                exit('Legacy receipt requires reconciliation before approval');
+            }
+            if ($order) {
+                $approved = $action === 'approve';
+                $this->db->query('UPDATE checkout_orders SET state=?, settlement_id=? WHERE id=?',
+                    $approved ? 'paid' : 'cancelled', $approved ? 'bank-'.$id : null, $order['id']);
+            }
+            $user = model('user')->getUser($details['userid']);
+            if ($action == 'delete') {
+                model('user')->addNotification($user['id'], 'bank-transfer-cancel');
+            } else {
 
-            model('admin')->addTransaction(array(
-                'amount' =>  $details['price'],
-                'type' => $details['type'],
-                'type_id' => $details['typeid'],
-                'sale_id' => time(),
-                'name' => $user['full_name'],
-                'country' => $user['country'],
-                'email' => $user['email'],
-                'userid' => $user['id']
-            ));
-            Hook::getInstance()->fire('payment.success', null, array($details['type'], $details['typeid']));
-            model('user')->addNotification($user['id'], 'bank-transfer-success');
+                model('admin')->addTransaction(array(
+                    'amount' =>  $order['base_price'],
+                    'type' => $order['item_type'],
+                    'type_id' => $order['item_id'],
+                    'sale_id' => 'bank-'.$id,
+                    'name' => $user['full_name'],
+                    'country' => $user['country'],
+                    'email' => $user['email'],
+                    'userid' => $user['id']
+                ));
+                Hook::getInstance()->fire('payment.success', null, array($order['item_type'], $order['item_id']));
+                model('user')->addNotification($user['id'], 'bank-transfer-success');
+            }
+            $this->db->query("DELETE FROM bank_transfers WHERE id=?", $id);
+            $this->db->query('COMMIT');
+        } catch (Throwable $e) {
+            $this->db->query('ROLLBACK');
+            throw $e;
         }
-        $this->db->query("DELETE FROM bank_transfers WHERE id=?", $id);
     }
 }

@@ -1,0 +1,128 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      APP_BASE_URL: https://${SITE_DOMAIN:?Set SITE_DOMAIN in .env.production}/
+      APP_DEBUG: "false"
+      APP_HTTPS: "true"
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:?Set DB_NAME in .env.production}
+      DB_USERNAME: ${DB_USERNAME:?Set DB_USERNAME in .env.production}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env.production}
+      MUSICENGINE_LOCAL_LICENSE_BYPASS: "0"
+    expose:
+      - "80"
+    volumes:
+      - musicengine-private:/var/www/html/musicengine-private
+      - musicengine-uploads:/var/www/html/Script/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@fsockopen('127.0.0.1', 80) ? 0 : 1);"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - edge
+      - private
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  charts:
+    build: .
+    command: ["/bin/sh", "-c", "while true; do php app/cli/charts.php || exit 1; sleep 300; done"]
+    restart: unless-stopped
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:?Set DB_NAME in .env.production}
+      DB_USERNAME: ${DB_USERNAME:?Set DB_USERNAME in .env.production}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env.production}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [private]
+
+  archives:
+    build: .
+    command: ["/bin/sh", "-c", "while true; do php -d memory_limit=128M app/cli/archive.php || exit 1; sleep 5; done"]
+    user: www-data
+    restart: unless-stopped
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:?Set DB_NAME in .env.production}
+      DB_USERNAME: ${DB_USERNAME:?Set DB_USERNAME in .env.production}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env.production}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - musicengine-private:/var/www/html/musicengine-private
+      - musicengine-uploads:/var/www/html/Script/uploads
+    networks: [private, edge]
+
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_NAME:?Set DB_NAME in .env.production}
+      MYSQL_USER: ${DB_USERNAME:?Set DB_USERNAME in .env.production}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env.production}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD in .env.production}
+    volumes:
+      - musicengine-db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - private
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:?Set SITE_DOMAIN in .env.production}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - edge
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  musicengine-private:
+  musicengine-db:
+  musicengine-uploads:
+  caddy-data:
+  caddy-config:
+
+networks:
+  edge:
+  private:
+    internal: true

@@ -4,7 +4,7 @@
     <div class="row">
         <div
             data-paginate-url="notification/paginate"
-            data-param="<?php echo perfectSerialize(array('limit' => 20))?>"
+            data-param="<?php echo paginationState(array('limit' => 20))?>"
             id="notifications-lists"
             class="col-md-8" >
             <?php Hook::getInstance()->fire('global.top')?>

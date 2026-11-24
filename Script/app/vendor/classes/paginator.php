@@ -15,19 +15,19 @@ class Paginator {
         $this->db = Database::getInstance();
         $this->query = $query;
 
-        $result = $this->db->query($this->query, $param);
-        if($result) $this->total = $result->rowCount();
+        $result = $this->db->query("SELECT COUNT(*) FROM (".$this->query.") AS matching_rows", $param);
+        if($result) $this->total = $result->fetchColumn();
 
         $this->page = Request::instance()->input('page', 1);
         $this->validatePageNumber();
-        $this->limit = $limit;
+        $this->limit = $limit === 'all' ? 'all' : max(1,paginationNumber($limit,true));
         $this->links = $links;
         $this->baseUrl = ($baseUrl) ? $baseUrl : getFullUrl();
         $this->param = $param;
     }
 
     function validatePageNumber() {
-        $this->page = (int) str_replace("-", '', $this->page);
+        $this->page = max(1, paginationNumber($this->page, false));
     }
 
     public function setListClass($class = "") {
@@ -44,9 +44,14 @@ class Paginator {
         if($this->limit == "all") {
             $query = $this->query;
         } else {
-            $query = $this->query." LIMIT ".(($this->page - 1) * $this->limit).", {$this->limit}";
+            $query = $this->query." LIMIT ? OFFSET ?";
         }
-        $query = $this->db->query($query, $this->param);
+        $params = $this->param;
+        if ($this->limit !== 'all') {
+            $params[] = $this->limit;
+            $params[] = ($this->page - 1) * $this->limit;
+        }
+        $query = $this->db->query($query, $params);
         if($query) {
             return $query->fetchAll(PDO::FETCH_ASSOC);
         }

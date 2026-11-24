@@ -1,7 +1,7 @@
 <div
     data-paginate-url="artists/paginate"
     data-offset="0"
-    data-param="<?php echo perfectSerialize(array('limit' => 20, 'type' => $type, 'term' => $term))?>"
+    data-param="<?php echo paginationState(array('limit' => 20, 'type' => $type, 'term' => $term))?>"
     class="playlists-container grid-container clearfix"
     id="artists-top">
 

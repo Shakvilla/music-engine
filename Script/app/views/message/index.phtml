@@ -7,7 +7,7 @@
                 <a href="" onclick="return showMessage()" class="btn btn-secondary round-sm new"><?php _l('new-message')?></a>
             </div>
             <div class="conversations">
-                <?php foreach($C->model('message')->getConversations() as $conversation):?>
+                <?php $inboxOffset = $request->input('offset', 0); $inbox = $C->model('message')->getConversations($inboxOffset); foreach($inbox as $conversation):?>
                    <a href="<?php echo url('messages', array('cid' => $conversation['id']))?>" data-ajax="true">
                        <div class="each media <?php echo ($conversation['unread'] > 0 ) ? 'unread' : null?> <?php echo ( $cid==$conversation['id']) ? 'active': null?>">
                            <div class="avatar" style="background-image: url(<?php echo $C->model('user')->getAvatar($conversation['user'], 200)?>);"></div>
@@ -32,13 +32,15 @@
                        </div>
                    </a>
                 <?php endforeach;?>
+                <?php if ($inboxOffset): ?><a href="<?php echo url('messages',['offset'=>max(0,$inboxOffset-25)])?>">Previous conversations</a><?php endif ?>
+                <?php if (count($inbox) === 25): ?><a href="<?php echo url('messages',['offset'=>$inboxOffset+25])?>">More conversations</a><?php endif ?>
             </div>
         </div>
         <div class="right">
-            <?php if($cid):?>
+            <?php if($cid && ($conversation = $C->model('message')->findConversation($cid))):?>
                 <div class="head">
 
-                    <?php $conversation = $C->model('message')->findConversation($cid);?>
+
                     <div class="media">
                         <div class="avatar" style="background-image: url(<?php echo $C->model('user')->getAvatar($conversation['user'], 200)?>);"></div>
                         <div class="media-body">
@@ -66,7 +68,7 @@
                 <div
                         class="chats-container"
                         data-paginate-url="chat/paginate"
-                        data-param="<?php echo perfectSerialize(array('cid' => $cid))?>"
+                        data-param="<?php echo paginationState(array('cid' => $cid))?>"
                         id="chats-container"
                         data-offset="0"
                         data-prepend="true"

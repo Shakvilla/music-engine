@@ -2,7 +2,7 @@
     <a href="<?php echo url()?>" data-ajax="true" class="btn btn-secondary btn-block "><?php _l('go-back-home')?></a>
 </div>
 
-<ul class="nav" >
+<ul class="nav bc-admin-menu">
     <li><a id="dashboard-menu" data-ajax="true" class="sub-menu <?php echo ( $C->activeMenu == 'dashboard') ? 'active' : null?>" href="<?php echo url('admin')?>"><i class="la la-safari"></i>  <?php _l('dashboard')?></a></li>
     <?php if(model('user')->hasRole('manage-settings')):?>
         <li><a id="settings-menu" data-ajax="true" class="sub-menu <?php echo ( $C->activeMenu == 'settings') ? 'active' : null?>" href="<?php echo url('admin/settings')?>"><i class="la la-cog"></i> <?php _l('site-settings')?></a></li>

@@ -14,7 +14,7 @@
     <div
             data-paginate-url="playlist/paginate"
             data-offset="0"
-            data-param="<?php echo perfectSerialize(array('type' => $type, 'typeId' => $typeId, 'limit' => 20))?>"
+            data-param="<?php echo paginationState(array('type' => $type, 'typeId' => $typeId, 'limit' => 20))?>"
             class="playlists-container grid-container clearfix"
             id="playlists-<?php echo $type?>-<?php echo $typeId?>">
 

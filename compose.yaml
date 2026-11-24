@@ -1,0 +1,78 @@
+services:
+  app:
+    build: .
+    ports:
+      - "127.0.0.1:${APP_PORT:-8082}:80"
+    volumes:
+      - musicengine-private:/var/www/html/musicengine-private
+      - ./Script:/var/www/html/Script
+    environment:
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      APP_BASE_URL: http://localhost:${APP_PORT:-8082}/
+      APP_DEBUG: "true"
+      APP_HTTPS: "false"
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-musicengine}
+      DB_USERNAME: ${DB_USERNAME:-musicengine}
+      DB_PASSWORD: ${DB_PASSWORD:-musicengine}
+      MUSICENGINE_LOCAL_LICENSE_BYPASS: "1"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  charts:
+    build: .
+    command: ["/bin/sh", "-c", "while true; do php app/cli/charts.php || exit 1; sleep 300; done"]
+    restart: unless-stopped
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-musicengine}
+      DB_USERNAME: ${DB_USERNAME:-musicengine}
+      DB_PASSWORD: ${DB_PASSWORD:-musicengine}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./Script:/var/www/html/Script:ro
+
+  archives:
+    build: .
+    command: ["/bin/sh", "-c", "while true; do php -d memory_limit=128M app/cli/archive.php || exit 1; sleep 5; done"]
+    user: www-data
+    restart: unless-stopped
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-musicengine}
+      DB_USERNAME: ${DB_USERNAME:-musicengine}
+      DB_PASSWORD: ${DB_PASSWORD:-musicengine}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - musicengine-private:/var/www/html/musicengine-private
+      - ./Script:/var/www/html/Script
+
+  db:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: ${DB_NAME:-musicengine}
+      MYSQL_USER: ${DB_USERNAME:-musicengine}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-musicengine}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-local-root-password}
+    ports:
+      - "127.0.0.1:${DB_PORT:-3308}:3306"
+    volumes:
+      - musicengine-db:/var/lib/mysql
+      - ./MYSQL/MusicEngine.sql:/docker-entrypoint-initdb.d/001-musicengine.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  musicengine-private:
+  musicengine-db:

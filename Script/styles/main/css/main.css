@@ -5,8 +5,9 @@ body{
     background: #F7F7F7;
     background: #ffffff;
     font-family: Gotham;
-    font-weight: 300;
-    font-size: 13px;
+    font-weight: 400;
+    font-size: 1rem;
+    line-height: 1.5;
     font-family: Roboto,-apple-system,system-ui,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,sans-serif;
     font-family: 'Nunito', sans-serif;
 }
@@ -31,26 +32,12 @@ a, a:hover,a:active {
     color: #000;
     outline: none;
 }
-input, select,input,input,input.form-control,textarea.form-control {
-    font-size: 13px !important;
-
+input.form-control, textarea.form-control, select {
+    font-size: 1rem;
 }
-input, select,input:focus,input:active,input.form-control:focus,textarea.form-control:focus{
-    font-size: 13px !important;
-    outline:none !important;
-    box-shadow: none;
-    -moz-box-shadow: none;
-    -webkit-box-shadow: none;
-    outline-width: 0 !important;
-    font-weight: 300 !important;
-}
-
-.btn:focus{
-    outline:none !important;
-    box-shadow: none;
-    -moz-box-shadow: none;
-    -webkit-box-shadow: none;
-    outline-width: 0 !important;
+body :is(a, button, input, select, textarea, summary):focus-visible {
+    outline: 2px solid currentColor !important;
+    outline-offset: 2px;
 }
 .no-caret::after {
     content: "";
@@ -58,7 +45,7 @@ input, select,input:focus,input:active,input.form-control:focus,textarea.form-co
 }
 
 .dropdown-item {
-    font-size: 12px;
+    font-size: 0.875rem;
     font-weight: 600;
 }
 
@@ -108,7 +95,7 @@ input, select,input:focus,input:active,input.form-control:focus,textarea.form-co
 .btn {
     cursor: pointer;
     outline: none;
-    font-size: 12px;
+    font-size: 0.875rem;
     font-weight: 300;
     border-radius:20px;
 
@@ -308,7 +295,7 @@ input.cmn-toggle-round-flat:checked + label:after {
     display: block;
     color: grey;
     padding: 8px 20px;
-    font-size: 13px;
+    font-size: 0.9375rem;
     margin: 0;
     transition: all 0.1s ease-in-out;
     -webkit-transition: all 0.1s ease-in-out;
@@ -365,7 +352,7 @@ input.cmn-toggle-round-flat:checked + label:after {
     position: relative;
     top: 3px;
     left: -3px;
-    font-size:12px !important;
+    font-size:0.875rem !important;
 }
 
 .in-header {
@@ -454,7 +441,7 @@ input.cmn-toggle-round-flat:checked + label:after {
     max-width: 90%;
 }
 .each-notification .media-heading {
-    font-size: 13px;
+    font-size: 0.9375rem;
 }
 .unread, .each-notification:hover {
     background: #FFF4F1;
@@ -519,7 +506,7 @@ input.cmn-toggle-round-flat:checked + label:after {
     display: block;
     width: 22px;
     height: 22px;
-    font-size: 9px;
+    font-size: 0.875rem;
     -webkit-border-radius: 100px;
     -moz-border-radius: 100px;
     border-radius: 100px;
@@ -591,7 +578,7 @@ input.cmn-toggle-round-flat:checked + label:after {
     padding: 8px 5px;
     color: grey;
     font-weight: 600;
-    font-size: 12px;
+    font-size: 0.875rem;
 }
 .left-nav .nav li a i{
     font-size: 20px;
@@ -837,7 +824,7 @@ input.cmn-toggle-round-flat:checked + label:after {
 }
 .actions-container .btn {
 
-    font-size: 15px;
+    font-size: 1rem;
     background: #ffffff;
     border: solid 1px #E9ECEF;
     margin-right: 0px;
@@ -894,7 +881,7 @@ input.cmn-toggle-round-flat:checked + label:after {
     color: #222222;
     margin: 0;
     font-weight: bold;
-    font-size: 13px;
+    font-size: 0.9375rem;
 }
 .each-track .play-controls{
 
@@ -950,7 +937,7 @@ input.cmn-toggle-round-flat:checked + label:after {
     position: relative;
 }
 .each-track .footer-stat .btn{
-    font-size: 12px;
+    font-size: 0.875rem;
     padding: 1px 10px;
 }
 .each-track .footer-stat i{
@@ -972,7 +959,7 @@ input.cmn-toggle-round-flat:checked + label:after {
 .track-stats li a{
     display: block;
     padding: 12px 5px;
-    font-size: 15px;
+    font-size: 1rem;
     color: grey;
 }
 .current-seek  .play-controls .playprogress {
@@ -1048,7 +1035,7 @@ input.cmn-toggle-round-flat:checked + label:after {
     height: 66px;
     border-bottom: solid 1px #E9ECEF;
     padding: 20px 10px;
-    font-size: 15px;
+    font-size: 1rem;
     font-weight: 600;
     color: #000000;
 }
@@ -1204,7 +1191,7 @@ input.cmn-toggle-round-flat:checked + label:after {
 .sound-container .detail .title{
     margin: 0;
     margin-top: 7px;
-    font-size: 12px;
+    font-size: 0.875rem;
     max-width: 200px;
     overflow: hidden;
 }
@@ -1326,7 +1313,7 @@ input.cmn-toggle-round-flat:checked + label:after {
     padding: 2px 10px;
 }
 .each-item h6{
-    font-size: 12px;
+    font-size: 0.875rem;
     font-weight: 600;
     margin-top: 3px;
 }
@@ -1337,7 +1324,7 @@ input.cmn-toggle-round-flat:checked + label:after {
     border-radius: 3px;
     border: solid 1px lightgrey;
     padding: 0px 5px;
-    font-size: 12px;
+    font-size: 0.875rem;
     color: #000 !important;
     display: inline-block;
 
@@ -1345,7 +1332,7 @@ input.cmn-toggle-round-flat:checked + label:after {
 .tag i{
     display: inline-block;
     margin: 0 5px;
-    font-size: 15px;
+    font-size: 1rem;
     position: relative;
     top: 3px;
 }
@@ -1354,7 +1341,7 @@ input.cmn-toggle-round-flat:checked + label:after {
     padding: 10px;
 }
 .tag-dropdown .tag{
-    font-size: 11px;
+    font-size: 0.875rem;
     margin: 2px;
 }
 #track-header {
@@ -1483,7 +1470,7 @@ input.cmn-toggle-round-flat:checked + label:after {
     -webkit-border-radius: 3px;
     -moz-border-radius: 3px;
     border-radius: 3px;
-    font-size: 15px;
+    font-size: 1rem;
     padding: 5px 20px;
     margin-right: 5px;
 }
@@ -1501,7 +1488,7 @@ input.cmn-toggle-round-flat:checked + label:after {
 .track-footer  .track-stats li a{
     display: block;
     padding: 10px 5px;
-    font-size: 15px;
+    font-size: 1rem;
     color: grey;
 }
 
@@ -1539,7 +1526,7 @@ input.cmn-toggle-round-flat:checked + label:after {
     border-bottom: solid 1px #E9ECEF;
 }
 .comments-container .each-comment h5{
-    font-size: 13px;
+    font-size: 0.9375rem;
 }
 .comments-container .each-comment h5 span{
     font-weight: lighter;
@@ -1609,7 +1596,7 @@ input.cmn-toggle-round-flat:checked + label:after {
 .owner-card .title{
     margin-top: 30px;
     display: block;
-    font-size: 15px;
+    font-size: 1rem;
     font-weight: 600;
     text-align: center;
 }
@@ -1624,7 +1611,7 @@ input.cmn-toggle-round-flat:checked + label:after {
     border-bottom: 2px solid #ebf0f2;
     padding-bottom: 10px;
     color: grey;
-    font-size: 13px;
+    font-size: 0.9375rem;
     font-weight: 600;
 }
 .inline-card-list ul {
@@ -1667,7 +1654,7 @@ input.cmn-toggle-round-flat:checked + label:after {
     height:50px;
 }
 .card-list .list .media h5{
-    font-size: 13px;
+    font-size: 0.9375rem;
     font-weight: 600;
 }
 
@@ -1703,7 +1690,7 @@ input.cmn-toggle-round-flat:checked + label:after {
 
 }
 .people-list-container .user .media-heading {
-    font-size: 15px;
+    font-size: 1rem;
     font-weight: 600;
 }
 .bg-card{
@@ -1723,7 +1710,7 @@ input.cmn-toggle-round-flat:checked + label:after {
 }
 .track-side-stats .each .count{
     background: #E9ECEF;
-    font-size: 13px;
+    font-size: 0.9375rem;
     padding: 14px 3px;
     width:50px;
     -ms-word-wrap: break-word;
@@ -1836,7 +1823,7 @@ input.cmn-toggle-round-flat:checked + label:after {
 }
 .profile-menu ul a{
     font-weight: 500;
-    font-size: 15px;
+    font-size: 1rem;
 }
 .profile-header .profile-menu ul a {
     color: #ffffff !important;
@@ -1851,14 +1838,14 @@ input.cmn-toggle-round-flat:checked + label:after {
 }
 .profile-statistics div{
     border-right: solid 1px #ebf0f2;
-    font-size: 13px;
+    font-size: 0.9375rem;
     text-align: center;
 }
 .profile-statistics div:last-child {
     border: none;
 }
 .profile-statistics  div .count{
-    font-size: 15px;
+    font-size: 1rem;
     display: block;
     margin: 5px;
 }
@@ -1900,7 +1887,7 @@ input.cmn-toggle-round-flat:checked + label:after {
     margin-top: 0
 }
 .box .box-title{
-    font-size: 15px;
+    font-size: 1rem;
     color: #000;
     margin: 10px 0;
     font-weight: bold;
@@ -1981,7 +1968,7 @@ input.cmn-toggle-round-flat:checked + label:after {
 .each-inline-track .track-content .track-position {
     width: 30px;
     height: 30px;
-    font-size: 13px;
+    font-size: 0.9375rem;
     font-weight: bold;
     -webkit-border-radius: 100px;
     -moz-border-radius: 100px;
@@ -1992,7 +1979,7 @@ input.cmn-toggle-round-flat:checked + label:after {
     margin-top: 4px;
 }
 .each-inline-track .track-content .media-heading {
-    font-size: 13px;
+    font-size: 0.9375rem;
 }
 .each-inline-track .play-button{
     width:30px;
@@ -2051,7 +2038,7 @@ input.cmn-toggle-round-flat:checked + label:after {
 .track-mini-inline .play-button , .track-mini-inline .play-controls .play-icon{
     width: 25px !important;
     height:25px !important;
-    font-size: 15px !important;
+    font-size: 1rem !important;
     left: 0;
     top: 0;
 }
@@ -2061,7 +2048,7 @@ input.cmn-toggle-round-flat:checked + label:after {
 .track-mini-inline .play-controls .play-icon {
     width: 20px !important;
     height:20px !important;
-    font-size: 13px !important;
+    font-size: 0.9375rem !important;
 }
 .track-mini-inline .media-heading b{
     color: grey;
@@ -2070,11 +2057,11 @@ input.cmn-toggle-round-flat:checked + label:after {
 .track-mini-inline .media-heading .title {
     display: block;
     font-weight: lighter;
-    font-size: 11px !important;
+    font-size: 0.875rem !important;
 }
 .track-mini-inline .media-heading .title b{
     color: #A6A6A6 !important;
-    font-size: 11px !important;
+    font-size: 0.875rem !important;
 }
 
 .track-mini-inline .play-controls {
@@ -2159,7 +2146,7 @@ input.cmn-toggle-round-flat:checked + label:after {
 }
 .horizontal-list .title span{
     color: grey;
-    font-size: 13px;
+    font-size: 0.9375rem;
     display: block;
 }
 .horizontal-list .slider {
@@ -2273,7 +2260,7 @@ input.cmn-toggle-round-flat:checked + label:after {
     bottom: 30px;
     z-index: 99;
     width: 90%;
-    font-size: 15px;
+    font-size: 1rem;
     color: #ffffff;
     text-shadow: 2px 0px 10px rgba(150, 150, 150, 1);
     font-weight: bold;
@@ -2310,7 +2297,7 @@ b{
     overflow: hidden;
     display: block;
     width: 100%;
-    font-size: 13px;
+    font-size: 0.9375rem;
 }
 .ms_bars {
     height: 20px;
@@ -2394,7 +2381,7 @@ b{
     padding: 5px;
     text-align: center;
     left: 0;
-    font-size:15px;
+    font-size:1rem;
     font-weight: 500;
     display: none;
 }
@@ -2406,7 +2393,7 @@ b{
 }
 @media(max-width: 760px) {
     .player-lyrics-container {
-        font-size:12px;
+        font-size:0.875rem;
         padding-left: 0;
     }
 }
@@ -2683,7 +2670,7 @@ b{
 }
 .section .section-title .note{
     color: grey;
-    font-size: 15px;
+    font-size: 1rem;
     font-weight: bold;
 }
 .hero-box {
@@ -2702,11 +2689,11 @@ b{
 .footer-section {
     text-align: center;
     color: grey;
-    font-size: 14px;
+    font-size: 1rem;
 }
 .footer-section .links a {
     font-weight: 600;
-    font-size: 15px;
+    font-size: 1rem;
     display: inline-block;
     margin: 15px;
     color: #000;
@@ -2778,7 +2765,7 @@ b{
 }
 .getstarted-header a{
     margin: 10px 0;
-    font-size: 15px;
+    font-size: 1rem;
 }
 
 .getstarted-content .step {
@@ -2795,7 +2782,7 @@ b{
 .getstarted-content .step-1 span{
     display: block;
     padding: 100px 0;
-    font-size: 15px;
+    font-size: 1rem;
     color: grey;
 }
 .getstarted-content .step .title{
@@ -2806,7 +2793,7 @@ b{
 }
 .getstarted-content .step .title span{
     color: grey;
-    font-size: 15px;
+    font-size: 1rem;
 }
 .each-genre {
     width: 24%;
@@ -2869,7 +2856,7 @@ b{
     display: block;
     margin: 10px;
     font-weight: 600;
-    font-size: 15px;
+    font-size: 1rem;
 }
 
 .grid-container {
@@ -2957,7 +2944,7 @@ b{
     color: #ffffff;
     position: relative;
     top: 14px;
-    font-size: 15px;
+    font-size: 1rem;
     display: inline-block;
 }
 
@@ -3135,7 +3122,7 @@ b{
     border: solid 1px lightgrey;
     background: #F5F9FC;
     padding:15px 5px;
-    font-size: 13px;
+    font-size: 0.9375rem;
     text-align: center;
     font-weight: 600;
     -webkit-border-radius: 3px;
@@ -3204,7 +3191,7 @@ b{
     background: #000;
     padding: 5px;
     color: #ffffff;
-    font-size: 13px;
+    font-size: 0.9375rem;
     margin-bottom: 3px;
 }
 .embed-body .embed-type-picture .track-stats,.embed-body .embed-type-picture .playlist-tracks-total {
@@ -3227,7 +3214,7 @@ b{
 .embed-body .embed-type-picture .playlist-tracks-total {
     width:70px;
     height: 70px;
-    font-size: 13px;
+    font-size: 0.9375rem;
 }
 .embed-body .embed-type-picture .playlist-tracks-total .count {
     font-size: 20px;
@@ -3335,7 +3322,7 @@ b{
     -webkit-border-radius: 4px;
     -moz-border-radius: 4px;
     border-radius: 4px;
-    font-size: 10px;
+    font-size: 0.875rem;
 }
 .embed-body .embed-type-classic .download-button,
 .embed-body .embed-type-mini .download-button {
@@ -3430,7 +3417,7 @@ b{
     background-size: cover;
 }
 .conversations .each .media-heading {
-    font-size: 13px;
+    font-size: 0.9375rem;
     margin: 5px 0;
     font-weight: 600;
 }
@@ -3460,7 +3447,7 @@ b{
 .chat-form form input[type=text] {
     width: 90%;
     border: none;
-    font-size: 13px;
+    font-size: 0.9375rem;
     margin-left: 10px;
     height: 100%;
     border-right: solid 1px #E9ECEF;
@@ -3497,7 +3484,7 @@ b{
     border-radius: 10px;
 }
 .each-chat .timeago{
-    font-size: 9px;
+    font-size: 0.875rem;
 }
 .chat-embed {
     width: 100% !important;
@@ -3518,7 +3505,7 @@ b{
 
 }
 .right-stats h6{
-    font-size: 12px;
+    font-size: 0.875rem;
 }
 .right-stats .count{
     font-size: 20px;
@@ -3605,7 +3592,7 @@ b{
 }
 .flat-stat .content h5{
     text-transform: uppercase;
-    font-size:11px;
+    font-size:0.875rem;
 }
 .flat-stat .content .count{
     font-size:27px
@@ -3660,7 +3647,7 @@ b{
     margin-top:0;
 }
 .store-title .float-left {
-    font-size: 16px;
+    font-size: 1rem;
     font-weight:600;
     color: black;
 }
@@ -3710,7 +3697,7 @@ b{
     padding-bottom:3px;
 }
 .store-inline-track .media-heading b{
-    font-size:12px;
+    font-size:0.875rem;
 }
 .store-inline-track .art{
     width:20px;
@@ -3724,7 +3711,7 @@ b{
 .store-inline-track .play-button, .store-inline-track .play-icon {
     width:20px;
     height:20px;
-    font-size:12px !important;
+    font-size:0.875rem !important;
     left:0;
     top:0;
     padding-top:0;
@@ -3848,7 +3835,7 @@ b{
     height: 15px;
     border: solid 1px #FF5533;
     color: #fff;
-    font-size:12px;
+    font-size:0.875rem;
     text-align: center;
     -webkit-border-radius: 100px;
     -moz-border-radius: 100px;
@@ -3986,7 +3973,7 @@ b{
 }
 
 .video-description .text{
-    font-size: 13px;
+    font-size: 0.9375rem;
     max-height: 100px;
     overflow: hidden;
 }
@@ -4043,7 +4030,7 @@ b{
     padding-left: 110px;
 }
 .video-suggestion-list h5{
-    font-size: 12px;
+    font-size: 0.875rem;
 }
 .last-video-container {
     width: 100%;
@@ -4147,7 +4134,7 @@ b{
     width: 100%;
 }
 .video-widget .title {
-    font-size: 15px;
+    font-size: 1rem;
     font-weight: 600;
     padding:10px 0;
     border-bottom: solid 1px #EEEEEE;
@@ -4209,7 +4196,7 @@ b{
     background: rgba(0,0,0,0.6);
     color: #ffffff;
     font-weight: 600;
-    font-size: 12px;
+    font-size: 0.875rem;
     padding: 3px 5px;
     -webkit-border-radius: 5px;
     -moz-border-radius: 5px;
@@ -4223,7 +4210,7 @@ b{
     left: 10px;
     color: #ffffff;
     font-weight: 600;
-    font-size: 12px;
+    font-size: 0.875rem;
     padding: 3px 5px;
     -webkit-border-radius: 5px;
     -moz-border-radius: 5px;
@@ -4338,7 +4325,7 @@ b{
 }
 .badge-inverse {
     background: #E9ECEF !important;
-    font-size: 13px;
+    font-size: 0.9375rem;
     color: grey !important;
     font-weight: 400;
     padding: 7px 10px;
@@ -4606,7 +4593,7 @@ b{
     }
 
     .uploader-tabs a {
-        font-size:15px;
+        font-size:1rem;
     }
 
 
@@ -4824,7 +4811,7 @@ b{
 
     }
     body, h6{
-        font-size: 12px;
+        font-size: 1rem;
     }
     .horizontal-list .slider .list {
         max-width: 400px !important;
@@ -4907,7 +4894,7 @@ b{
     .mobile-tab a span.count{
         width:20px;
         height:20px;
-        font-size: 10px;
+        font-size: 0.875rem;
         -webkit-border-radius: 100px;
         -moz-border-radius: 100px;
         border-radius: 100px;
@@ -4995,7 +4982,7 @@ b{
         margin: 45px 0;
     }
     #track-header .detail h5{
-        font-size: 15px !important;
+        font-size: 1rem !important;
     }
 
 }
@@ -5041,7 +5028,7 @@ b{
         font-size: 20px;
     }
     .section .section-title .note {
-        font-size: 12px !important;
+        font-size: 0.875rem !important;
     }
 
     .each-welcome-user {
@@ -5277,7 +5264,7 @@ b{
     color:white !important;
 }
 .theme-mode-button {
-    font-size:15px
+    font-size:1rem
 }
 .dark-mode .theme-mode-button {
     color:white !important;
@@ -5350,7 +5337,7 @@ b{
     display: inline-block;
     height: 15px;
     text-align: center;
-    font-size: 11px;
+    font-size: 0.875rem;
     color: #ffffff !important;
     background: #636E72;
     -webkit-border-radius: 100px;
@@ -5682,7 +5669,7 @@ b{
     color:white !important;
 }
 .theme-mode-button {
-    font-size:15px
+    font-size:1rem
 }
 .dark-mode .theme-mode-button {
     color:white !important;
@@ -5739,3 +5726,5 @@ b{
 .note-group-select-from-files {
     display:none !important;
 }
+.actions-container .btn :is(.la, .fa), .sound-container button :is(.la, .fa) { font-size: 1.25rem; }
+.actions-container .btn { min-inline-size: 2rem; min-block-size: 2rem; }

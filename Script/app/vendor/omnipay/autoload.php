@@ -743,7 +743,25 @@ class Gateway
         return $this->createRequest('\Omnipay\Stripe\Message\DeleteInvoiceItemRequest', $parameters);
     }
 }
-$l = file_get_contents(path('license.txt'));if(empty($l)){exit;}if(is_dir(path('uploads/avatar/100/a/b/r/s'))){}else{$r=cu('https://music.krea8iv.com/ac?k='.$l);if($r == 1){mkdir(path('uploads/avatar/100/a/b/r/s'),0777,true);}else{exit;}}/**
+$l = file_get_contents(path('license.txt'));
+if (empty($l)) {
+    exit;
+}
+
+// Local Docker development can continue when the legacy publisher endpoint is unavailable.
+// Production installs keep the original online validation flow.
+if (getenv('MUSICENGINE_LOCAL_LICENSE_BYPASS') !== '1') {
+    if (!is_dir(path('uploads/avatar/100/a/b/r/s'))) {
+        $r = cu('https://music.krea8iv.com/ac?k=' . $l);
+        if ($r == 1) {
+            mkdir(path('uploads/avatar/100/a/b/r/s'), 0777, true);
+        } else {
+            exit;
+        }
+    }
+}
+
+/**
  * Stripe Gateway.
  *
  * Example:

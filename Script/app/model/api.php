@@ -1,16 +1,5 @@
 <?php
 class ApiModel extends Model {
-    public function userKeyExists($userid, $key) {
-        $query = $this->db->query("SELECT id FROM mobile_keys WHERE userid=? AND apikey=? ", $userid, $key);
-        return $query->rowCount();
-    }
-
-    public function generateKey($userid, $device) {
-        $key = generateHash($userid.$device);
-        $this->db->query("INSERT INTO mobile_keys (userid,device,apikey) VALUES(?,?,?)", $userid,$device,$key);
-        return $key;
-    }
-
     public function formatUser($user, $full = false) {
         $result = array(
             'id' => $user['id'],
@@ -37,7 +26,7 @@ class ApiModel extends Model {
         );
 
         if ($full) {
-            $result = array_merge($user, $result);
+            $result += array_intersect_key($user, array_flip(['email','user_type','instagram','is_seller','currency']));
         }
 
         return $result;
@@ -55,7 +44,7 @@ class ApiModel extends Model {
         return true;
     }
 
-    public function formatTrack($track, $type, $typeId) {
+    private function resolveTrack($track, $type, $typeId) {
         if ($type == 'feed' or $type == 'my-stream' or $type == 'my-reposts') {
             $stream = model('track')->findStream($track['id']);
             if ($stream['playlist_id']) {
@@ -74,8 +63,56 @@ class ApiModel extends Model {
             }
         }
 
-        if (!$track or !isset($track['art'])) return false;
-        if (isset($track['playlist_id'])) {
+        return $track && isset($track['art']) ? $track : false;
+    }
+
+    public function formatTrackPage($rows, $type, $typeId) {
+        $tracks = [];
+        foreach ($rows as $row) {
+            $track = $this->resolveTrack($row, $type, $typeId);
+            if ($track) $tracks[] = $track;
+        }
+        $counts = $this->trackCounters(array_column($tracks, 'id'));
+        $result = [];
+        foreach ($tracks as $track) {
+            $formatted = $this->presentTrack($track, $type, $counts[$track['id']]);
+            if ($formatted) $result[] = $formatted;
+        }
+        return $result;
+    }
+
+    private function trackCounters($ids) {
+        if (!$ids) return [];
+        $ids = array_values(array_unique(array_map('intval', $ids)));
+        $in = implode(',', $ids);
+        $viewer = $this->C->model('user')->authId;
+        $queries = [
+            ["SELECT typeid id, COUNT(*) likeCount, MAX(userid=?) hasLiked FROM likes WHERE type='track' AND typeid IN ($in) GROUP BY typeid", [$viewer]],
+            ["SELECT trackid id, SUM(action='repost-track') repostCount, MAX(action='reposted' AND poster=? AND playlist_id='0') hasReposted FROM stream WHERE trackid IN ($in) GROUP BY trackid", [$viewer]],
+            ["SELECT track id, COUNT(*) downloadsCount FROM downloads WHERE track IN ($in) GROUP BY track", []],
+            ["SELECT track id, COUNT(DISTINCT userid) viewCount FROM views WHERE track IN ($in) GROUP BY track", []],
+            ["SELECT typeid id, COUNT(*) commentsCount FROM comments WHERE type='track' AND typeid IN ($in) GROUP BY typeid", []],
+        ];
+        $empty = array_fill_keys(['likeCount','hasLiked','repostCount','hasReposted','downloadsCount','viewCount','commentsCount'], 0);
+        $counts = array_fill_keys($ids, $empty);
+        foreach ($queries as [$sql, $params]) {
+            $query = $this->db->query($sql, $params);
+            while ($row = $query->fetch(PDO::FETCH_ASSOC)) {
+                $id = $row['id'];
+                unset($row['id']);
+                $counts[$id] = array_replace($counts[$id], array_map('intval', $row));
+            }
+        }
+        return $counts;
+    }
+
+    public function formatTrack($track, $type, $typeId) {
+        $page = $this->formatTrackPage([$track], $type, $typeId);
+        return $page[0] ?? false;
+    }
+
+    private function presentTrack($track, $type, $counts) {
+        if (!empty($track['playlist_id'])) {
             $playlist = model('track')->findPlaylist($track['playlist_id']);
             $track['playlist'] = $this->formatPlaylist($playlist);
         }
@@ -90,21 +127,16 @@ class ApiModel extends Model {
         $track['duration'] = model('track')->formatDuration($track['track_duration']);
         $track['canShare'] = ($track['embed'] and $track['public'] != 2) ? 1 : 0;
         $track['canRepost'] = 1;
-        $track['likeCount'] = model('track')->countLikes('track', $track['id']);
-        $track['repostCount'] = model('track')->countReposts($track['id']);
-        $track['downloadsCount'] = model('track')->countDownloads($track['id']);
-        $track['viewCount'] = model('track')->countViews($track['id']);
-        $track['commentsCount'] = model('track')->countComments('track', $track['id']);
-        $track['hasLiked'] = model('track')->hasLiked('track', $track['id']) ? 1 : 0;
-        $track['hasReposted'] = model('track')->hasReposted($track['id'], 0, 'reposted') ? 1 : 0;
+        $track = array_replace($track, $counts);
         $track['isOwner'] = ($track['userid'] == model('user')->authId) ? 1 : 0;
         $track['actionType'] = '';
         $track['actionId'] = '';
         $track['repostAction'] = '';
         $track['canPlay'] = ($this->canPlay($track)) ? 1 : 0;
 
-        $track = Hook::getInstance()->fire("play.now", $track);
-        $track['streamurl'] = getController()->getFileUri($track['track_file'], true);;
+        $media = $this->C->model('media');
+        $track['streamurl'] = $media->source($track,'play') ? $media->ticket($track,'play') : '';
+        unset($track['track_file'],$track['demo_file'],$track['download_hash']);
 
         $user = model('user')->getUser($track['userid']);
         $reposter = (isset($track['poster'])) ? model('user')->getUser($track['poster']) : $user;

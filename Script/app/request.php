@@ -1,5 +1,12 @@
 <?php
 class Request {
+    public const MUTATIONS = [
+        'track/delete','playlist/delete','admin/playlist/delete','logout','trial/pro','welcome/finish',
+        'track/add/later','track/remove/later','track/add/download','track/set/views','playlist/add/track','save/playlist/order',
+        'comment/delete','like/item','repost/item','report/comment','report/track','clear/history','follow','block',
+        'payment/stripe','payment/stripe/cancel','payment/paypal','payment/mollie','payment/method',
+        'admin/user/action','admin/withdraw/mark','spotlight/save','spotlight/remove','save/theme/mode',
+    ];
     private   $routes = array();
 
     private   $filters = array();
@@ -28,11 +35,11 @@ class Request {
         return self::$instance = new Request();
     }
 
-    public function start() {
+    public function start($cliTask = null) {
 
         $config = include(path()."config.php");
         $this->config = array_merge($this->config, $config);
-        $this->config['base_url'] = getRoot();
+        $this->config['base_url'] = getenv('APP_BASE_URL') ?: getRoot();
         $this->config['cookie_path'] = getBase();
 
         $this->requestUrl = getFullUrl();
@@ -89,6 +96,8 @@ class Request {
         });
 
         include_once(path("app/routes.php"));
+
+        if (PHP_SAPI === 'cli' && $cliTask) return $cliTask($this);
 
         //refresh conversion rates
         $this->refreshConversionRate();
@@ -260,6 +269,10 @@ class Request {
         $result = (isset($_GET[$name])) ? $_GET[$name] : $default;
         $result = (isset($_POST[$name])) ? $_POST[$name] : $result;
 
+        if ($name === 'limit' || $name === 'offset') {
+            if ($result === '' && $name === 'limit') return $default;
+            return paginationNumber($result === '' ? 0 : $result, $name === 'limit');
+        }
         if (is_array($result)) {
             if (empty($index)) {
                 $nR = array();
@@ -453,6 +466,16 @@ class Request {
         $controllerClass = ucwords($controller).'Controller';
         if (!class_exists($controllerClass)) return false;
 
+        $slug = $route->slug;
+        $callback = in_array($slug, ['payment/stripe/hook','payment/paypal/complete','payment/mollie/verify','payment/mollie/hook'], true);
+        if ($controller !== 'api' && !$callback) {
+            $adminAction = (str_starts_with($slug,'admin/') || str_starts_with($slug,'settings/')) &&
+                (isset($_GET['action']) || isset($_POST['action']) || isset($_GET['restore']));
+            $paymentAction = $slug === 'admin/payments' && isset($_GET['id']);
+            if (get_request_method() === 'POST' || in_array($slug,self::MUTATIONS,true) || $slug === 'watch/{id}/delete' || $adminAction || $paymentAction) {
+                requireMutationToken();
+            }
+        }
         $controllerClass = new $controllerClass($this);
         $this->controller = $controllerClass;
         if ($controllerClass->request == null) exit('Failed : Controller must call parent::__construct($request)');

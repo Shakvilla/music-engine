@@ -93,6 +93,8 @@ use Symfony\Component\HttpFoundation\ParameterBag;
  */
 class CreditCard
 {
+    use ParametersTrait;
+
     const BRAND_VISA = 'visa';
     const BRAND_MASTERCARD = 'mastercard';
     const BRAND_DISCOVER = 'discover';
@@ -134,13 +136,6 @@ class CreditCard
     );
 
     /**
-     * Internal storage of all of the card parameters.
-     *
-     * @var \Symfony\Component\HttpFoundation\ParameterBag
-     */
-    protected $parameters;
-
-    /**
      * Create a new CreditCard object using the specified parameters
      *
      * @param array $parameters An array of parameters to set on the new object
@@ -156,7 +151,6 @@ class CreditCard
      * Note: The fact that this class knows about a particular card brand does not imply
      * that your gateway supports it.
      *
-     * @see self::$supported_cards
      * @return array
      */
     public function getSupportedBrands()
@@ -196,45 +190,11 @@ class CreditCard
      * @param array $parameters An associative array of parameters
      * @return $this
      */
-    public function initialize(array $parameters = null)
+    public function initialize(?array $parameters = null)
     {
         $this->parameters = new ParameterBag;
 
         Helper::initialize($this, $parameters);
-
-        return $this;
-    }
-
-    /**
-     * Get all parameters.
-     *
-     * @return array An associative array of parameters.
-     */
-    public function getParameters()
-    {
-        return $this->parameters->all();
-    }
-
-    /**
-     * Get one parameter.
-     *
-     * @return mixed A single parameter value.
-     */
-    protected function getParameter($key)
-    {
-        return $this->parameters->get($key);
-    }
-
-    /**
-     * Set one parameter.
-     *
-     * @param string $key Parameter key
-     * @param mixed $value Parameter value
-     * @return $this
-     */
-    protected function setParameter($key, $value)
-    {
-        $this->parameters->set($key, $value);
 
         return $this;
     }
@@ -269,8 +229,9 @@ class CreditCard
      * Generally if you want to validate the credit card yourself with custom error
      * messages, you should use your framework's validation library, not this method.
      *
-     * @throws InvalidCreditCardException
      * @return void
+     * @throws Exception\InvalidRequestException
+     * @throws InvalidCreditCardException
      */
     public function validate()
     {
@@ -298,7 +259,6 @@ class CreditCard
             throw new InvalidCreditCardException('Card number should have 12 to 19 digits');
         }
     }
-
     /**
      * Get Card Title.
      *
@@ -417,7 +377,7 @@ class CreditCard
     public function setNumber($value)
     {
         // strip non-numeric characters
-        return $this->setParameter('number', preg_replace('/\D/', '', $value));
+        return $this->setParameter('number', preg_replace('/\D/', '', (string) $value));
     }
 
     /**
@@ -452,8 +412,10 @@ class CreditCard
      */
     public function getBrand()
     {
+        $number = (string) $this->getNumber();
+
         foreach ($this->getSupportedBrands() as $brand => $val) {
-            if (preg_match($val, $this->getNumber())) {
+            if (preg_match($val, $number)) {
                 return $brand;
             }
         }

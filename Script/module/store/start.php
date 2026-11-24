@@ -130,22 +130,8 @@ Hook::getInstance()->register('track.play.detail', function($result, $track) {
             $result['buyType'] = 'track';
             $result['buyTrack'] = $track['id'];
             if ($track['demo_file']) {
-                $ids = md5(uniqueKey(20, 50).session_id().time());
-                //if (!is_ajax()) exit('FORBIDDEN');
-                session_put($ids, 'set');
-                $url = url('track/play/'.$track['id'].'/'.$ids);
-                $file = config('enable-chunk-play', false) ? getController()->getFileUri($track['demo_file'], false) : getController()->getFileUri($track['demo_file']);
-                if (preg_match('#http#', $file)) $url = $file;
-                $result['url'] = $url;
                 $result['wave'] = assetUrl($track['demo_wave']);
                 $result['wave_colored'] = assetUrl($track['demo_wave_colored']);
-
-            } else {
-                if (!config('allow-play-before-buy', true)) {
-                    $result['url'] = '';
-                } else {
-                    $result['percentage'] = config('play-percentage', 30);
-                }
             }
         } else {
             if(!model('track')->hasView(model('user')->authId, $track['id']) and $track['userid'] != model('user')->authId) {

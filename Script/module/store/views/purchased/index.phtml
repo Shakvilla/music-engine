@@ -54,7 +54,7 @@
                                 <?php $user = $C->model('user')->getUser($track['userid'])?>
                                 <a
                                         data-id="<?php echo $track['id']?>"
-                                        data-url="<?php echo $C->model('track')->getTrackFile($track)?>"
+                                        data-url="<?php echo url('track/play/'.$track['id'].'/stream')?>"
                                         data-art="<?php echo $C->model('track')->getArt($track)?>"
                                         data-title="<?php echo str_limit( $track['title'], 50)?>"
                                         data-link="<?php echo url('track/'.$track['id'])?>"

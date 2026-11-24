@@ -58,7 +58,8 @@ class FetchTransactionResponse extends AbstractMollieResponse implements Redirec
      */
     public function isOpen()
     {
-        return isset($this->data['status']) && 'open' === $this->data['status'];
+        return isset($this->data['status'])
+            && ('open' === $this->data['status'] || 'created' === $this->data['status']);
     }
 
     /**
@@ -75,6 +76,14 @@ class FetchTransactionResponse extends AbstractMollieResponse implements Redirec
     public function isPaid()
     {
         return isset($this->data['status']) && 'paid' === $this->data['status'];
+    }
+
+    /**
+     * @return boolean
+     */
+    public function isAuthorized()
+    {
+        return isset($this->data['status']) && 'authorized' === $this->data['status'];
     }
 
     /**
@@ -103,6 +112,14 @@ class FetchTransactionResponse extends AbstractMollieResponse implements Redirec
         return $this->isRefunded()
             && isset($this->data['amountRemaining'])
             && $this->data['amountRemaining']['value'] > 0;
+    }
+
+    /**
+     * @return boolean
+     */
+    public function hasChargebacks()
+    {
+        return !empty($this->data['_links']['chargebacks']);
     }
 
     /**
@@ -146,7 +163,7 @@ class FetchTransactionResponse extends AbstractMollieResponse implements Redirec
      */
     public function getAmount()
     {
-        if ($this->isSuccessful() && is_array($this->data['amount'])) {
+        if (isset($this->data['amount']) && is_array($this->data['amount'])) {
             /**
              * $this->data['amount'] = [
              *      "currency" => "EUR",

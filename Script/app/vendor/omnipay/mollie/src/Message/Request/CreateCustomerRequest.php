@@ -10,6 +10,7 @@ use Omnipay\Mollie\Message\Response\CreateCustomerResponse;
  * Creates a simple minimal representation of a customer in the Mollie API.
  *
  * @see https://docs.mollie.com/reference/v2/customers-api/create-customer
+ * @method CreateCustomerResponse send()
  */
 class CreateCustomerRequest extends AbstractMollieRequest
 {
@@ -82,7 +83,7 @@ class CreateCustomerRequest extends AbstractMollieRequest
      */
     public function getData()
     {
-        $this->validate('apiKey', 'description', 'email');
+        $this->validate('apiKey');
 
         $data                = [];
         $data['name']        = $this->getDescription();

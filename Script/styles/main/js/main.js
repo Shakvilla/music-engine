@@ -128,20 +128,40 @@ function showEditPlaylistModal(id) {
 
     return false;
 }
-function changeAuthModal(form) {
+document.documentElement.classList.add('bc-auth-enhanced');
+function setAuthEmailStep(control, email, focus) {
+    var flow = control.closest('.bc-auth-flow');
+    flow.classList.toggle('is-email', email);
+    var step = flow.querySelector(email ? '.bc-auth-credentials' : '.bc-auth-methods');
+    var dialog = flow.closest('#authModal');
+    if (dialog) dialog.setAttribute('aria-labelledby', step.querySelector('h2').id);
+    if (focus !== false) step.querySelector(email ? 'input' : 'a, .bc-email-method').focus();
+}
 
-    $('.login-form').hide();
-    $('.signup-form').hide();
-    $('.forgot-form').hide();
-    if (form == '.signup-form') {
-        $('.auth-login-title').removeClass('active');
-        $('.auth-signup-title').addClass('active');
-    } else {
-        $('.auth-signup-title').removeClass('active');
-        $('.auth-login-title').addClass('active');
+function changeAuthModal(form, email) {
+    var dialog = $('#authModal');
+    var panel = dialog.find(form || '.login-form');
+    if (!panel.length) return false;
+
+    dialog.find('.login-form, .signup-form, .forgot-form').hide();
+    panel.show();
+    dialog.attr('aria-labelledby', panel.find('h2').attr('id'));
+    var flow = panel.find('.bc-auth-flow')[0];
+    if (flow) setAuthEmailStep(flow, !!email, false);
+
+    function focusField() {
+        panel.find('input:visible, .bc-provider-link:visible, .bc-email-method:visible').first().trigger('focus');
     }
-    $(form).show();
-    $("#authModal").modal("show");
+    if (dialog.hasClass('show')) {
+        focusField();
+    } else {
+        var opener = document.activeElement;
+        dialog.one('shown.bs.modal', focusField);
+        dialog.one('hidden.bs.modal', function () {
+            if (opener && document.contains(opener)) opener.focus();
+        });
+        dialog.modal('show');
+    }
     return false;
 }
 
@@ -1403,7 +1423,57 @@ function autoFillReleaseYear(t) {
     $('.upload-release-year').val($(t).val())
 }
 window.autoFillUploadData = false;
+// Keep the original player and store controls on the selected track.
+function prepareTopSongs(chart) {
+    var panel = chart.querySelector('.bc-song-detail');
+    var rows = chart.querySelectorAll('.track-list .each-inline-track');
+    rows.forEach(function (track) {
+        var play = track.querySelector('.track-play-button');
+        var rank = track.querySelector('.track-position').textContent.trim();
+        var duration = track.querySelector('.bc-chart-duration').textContent;
+        var row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'bc-song-row';
+        row.setAttribute('aria-pressed', 'false');
+        row.innerHTML = '<span></span><img alt=""><span><strong></strong><small></small></span><time></time>';
+        row.firstElementChild.textContent = rank.padStart(2, '0');
+        row.querySelector('img').src = play.dataset.art;
+        row.querySelector('strong').textContent = track.querySelector('.media-heading a').textContent.trim();
+        row.querySelector('small').textContent = play.dataset.owner;
+        row.querySelector('time').textContent = duration;
+        var art = track.querySelector('.art');
+        if (track.dataset.cover) art.style.backgroundImage = 'url(' + JSON.stringify(track.dataset.cover) + ')';
+        var album = track.querySelector('.bc-song-album');
+        if (album) {
+            album.hidden = false;
+            track.querySelector('.media').after(album);
+        }
+        track.replaceWith(row);
+        track.hidden = true;
+        panel.appendChild(track);
+        var genre = Array.from(chart.querySelectorAll('option[data-genre]')).find(function (option) {
+            return option.dataset.genre === track.dataset.genre;
+        });
+        var meta = document.createElement('small');
+        meta.className = 'bc-selected-meta';
+        meta.textContent = '#' + rank + (genre ? ' · ' + genre.textContent.trim() : '') + ' · ' + duration;
+        track.querySelector('.track-content').prepend(meta);
+        row.onclick = function () {
+            var previous = chart.querySelector('.bc-song-row[aria-pressed="true"]');
+            if (previous) previous.setAttribute('aria-pressed', 'false');
+            row.setAttribute('aria-pressed', 'true');
+            var shown = panel.querySelector('.each-inline-track:not([hidden])');
+            if (shown) shown.hidden = true;
+            track.hidden = false;
+            panel.hidden = false;
+            validatePlayingSong();
+        };
+        if (panel.hidden) row.click();
+    });
+}
+
 function reloadInit(paginate) {
+    document.querySelectorAll('.bc-song-chart').forEach(prepareTopSongs);
     window.autoFillUploadData = false;
     initAnimation();
     Hook.fire('reload.init');
@@ -1820,6 +1890,15 @@ function reloadInit(paginate) {
     });
 
 
+
+    $('.bc-reco-carousel').each(function () {
+        if (this.swiper) return;
+        new Swiper(this, {
+            slidesPerView: 4, spaceBetween: 24, watchOverflow: true,
+            navigation: {prevEl: this.querySelector('.bc-reco-prev'), nextEl: this.querySelector('.bc-reco-next')},
+            breakpoints: {900: {slidesPerView: 3, spaceBetween: 18}, 600: {slidesPerView: 2, spaceBetween: 12}}
+        });
+    });
 
     $('.slider').each(function() {
         var id = $(this).find('.swiper-container').attr('id');
@@ -3247,6 +3326,16 @@ $(function() {
             //document.body.style.overflow = 'hidden';
         }
         return false;
+    });
+
+    $(document).on('click', '.bc-rail-close, .bc-rail-shade', function() {
+        $('body').removeClass('side-menu-open');
+        $('.navicon:visible').first().trigger('focus');
+    });
+    $(document).on('keydown', function(event) {
+        if (event.key === 'Escape' && $('body').hasClass('side-menu-open')) {
+            $('.bc-rail-close:visible').trigger('click');
+        }
     });
 
     $(document).on('click', '.navicon-2', function() {

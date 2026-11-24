@@ -2,6 +2,43 @@
 class TrackModel extends Model {
     private $s3 = null;
 
+    public function getFileUri($path, $http = true) {
+        $file = $path;
+        if (preg_match('#s3-#',$file)) {
+            $s3 = $this->getS3();
+            $cmd = $s3->getCommand('GetObject', array(
+                'Bucket' => config('s3-bucket'),
+                'Key'    => 'uploads/tracks/'.$file
+            ));
+
+            $req = $s3->createPresignedRequest($cmd, '+5 minutes');
+            $url = (string) $req->getUri();
+            return $url;
+
+        }
+
+        if (preg_match('#w3-#',$file)) {
+            $s3 = $this->getWasabiS3();
+            $cmd = $s3->getCommand('GetObject', array(
+                'Bucket' => config('wasabi-bucket'),
+                'Key'    => 'uploads/tracks/'.$file
+            ));
+
+            $req = $s3->createPresignedRequest($cmd, '+5 minutes');
+            $url = (string) $req->getUri();
+            return $url;
+
+        }
+
+        if (preg_match('#ftp-#', $file)) {
+            $endpoint = config('ftp-endpoint');
+            $file = str_replace('ftp-','', $file);
+            $middle = (config('ftp-path', '/') != '/') ? config('ftp-path') : '';
+            return $endpoint.$middle.'/'.$file;
+        }
+        return ($http) ? assetUrl($file) : $file;
+    }
+
     public function getS3() {
         if ($this->s3) return $this->s3;
         include_once path('app/vendor/autoload.php');
@@ -219,7 +256,8 @@ class TrackModel extends Model {
         $result = array('canDownload' => true);
         $result = Hook::getInstance()->fire('can.download', $result, array($track));
         if (!$result['canDownload']) return false;
-        if (moduleExists('store') and $track['price'] > 0) {
+        if ($track['price'] > 0) {
+            if (!moduleExists('store')) return false;
             if (model('store::store')->hasPurchased($track['id'], 'track', true)) {
                 return true;
             }
@@ -274,7 +312,7 @@ class TrackModel extends Model {
     }
 
     public function getTrendingTags($limit = 10) {
-        $query = $this->db->query("SELECT * from tags  ORDER BY uses DESC LIMIT $limit");
+        $query = $this->db->query("SELECT * from tags  ORDER BY uses DESC LIMIT ?", paginationNumber($limit,true));
         return $query->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -314,38 +352,57 @@ class TrackModel extends Model {
             $time = get_time_relative_format($time);
             $currentTime = time();
 
-            $sql = "SELECT *,(SELECT count(track) FROM views WHERE views.track=tracks.id ) as count FROM tracks WHERE tracks.status=? AND  userid NOT IN ($blockedIds) AND userid NOT IN ($expiredArtists) AND  tracks.time BETWEEN $time AND $currentTime  AND (public != ? AND public != ?)  AND approved=?";
-            $param = array(1, 3,2,1);
+            $sql = "SELECT tracks.*,COALESCE(c.plays,0) AS count FROM tracks LEFT JOIN chart_counts c ON c.track=tracks.id AND c.period='all'
+                WHERE tracks.status=? AND userid NOT IN ($blockedIds) AND userid NOT IN ($expiredArtists) AND tracks.time BETWEEN ? AND ? AND public NOT IN (?,?) AND approved=?";
+            $param = [1,$time,$currentTime,3,2,1];
             if ($genre != 'all') {
                 $param[] = $genre;
                 $sql .= ' AND genre=? ';
             }
-            $sql .= " ORDER BY count DESC";
+            $sql .= " ORDER BY count DESC,tracks.id DESC";
 
 
         }elseif($type === 'charts-top'){
             //$limit = 50;
             list($genre, $time) = explode('/', $typeId);
             if (!$time) $time = config('chart-top-time', 'this-week');
-            $time = get_time_relative_format($time);
-            $currentTime = time();
-
-            $sql = "SELECT *,(SELECT count(track) FROM views WHERE views.track=tracks.id AND views.time BETWEEN $time AND $currentTime ) as count FROM tracks WHERE tracks.status=? AND userid NOT IN ($expiredArtists)  AND  userid NOT IN ($blockedIds)   AND (tracks.public != ? AND tracks.public != ?)  AND approved=?";
-            $param = array(1, 3,2,1);
+            $period = in_array($time,['this-month','last-month','last-week','this-year'],true) ? $time : 'this-week';
+            $sql = "SELECT tracks.*,album.id AS chart_album_id,album.name AS chart_album_name,COALESCE(c.plays,0) AS count FROM tracks LEFT JOIN chart_counts c ON c.track=tracks.id AND c.period=?
+                    LEFT JOIN playlist album ON album.id = (
+                        SELECT MIN(p.id) FROM playlistentries e JOIN playlist p ON p.id=e.playlist
+                        WHERE e.track=tracks.id AND p.userid=tracks.userid AND p.playlist_type=0 AND p.public=1
+                    )
+                    WHERE tracks.status=? AND tracks.userid NOT IN ($expiredArtists) AND tracks.userid NOT IN ($blockedIds) AND tracks.public NOT IN (?,?) AND approved=?";
+            $param = [$period,1,3,2,1];
             if ($genre != 'all') {
                 $param[] = $genre;
                 $sql .= ' AND genre=? ';
             }
-            $sql .= " ORDER BY count DESC";
+            $sql .= " ORDER BY count DESC,tracks.id DESC";
         }elseif($type == 'genre') {
             $sql = "SELECT * FROM  tracks WHERE  userid NOT IN ($blockedIds)AND userid NOT IN ($expiredArtists)  AND status=? AND genre=? AND (public != ? AND public != ?)  AND approved=?  ORDER BY id DESC";
             $param = array(1, $typeId, 3,2,1);
+        }elseif($type === 'coming-soon') {
+            // Use the published release metadata. Scheduled/private uploads stay hidden.
+            $sql = "SELECT * FROM tracks WHERE userid NOT IN ($blockedIds) AND userid NOT IN ($expiredArtists)
+                    AND status=? AND public=? AND approved=? AND track_release > ?
+                    ORDER BY track_release ASC, id ASC";
+            $param = array(1, 1, 1, date('Y-m-d'));
+        }elseif($type === 'songs-for-you'){
+            $sql = "SELECT tracks.* FROM tracks WHERE status=1 AND public=1 AND approved=1
+                    AND userid NOT IN ($blockedIds) AND userid NOT IN ($expiredArtists)
+                    ORDER BY EXISTS (SELECT 1 FROM follow WHERE follow.userid=? AND follow.follow_id=tracks.userid) DESC, ";
+            if (moduleExists('spotlight')) {
+                $sql .= "EXISTS (SELECT 1 FROM spotlight WHERE is_global=1 AND trackid=tracks.id) DESC, ";
+            }
+            $sql .= "tracks.id DESC";
+            $param = array($userid);
         }elseif($type == 'latest') {
             $sql = "SELECT * FROM  tracks WHERE userid NOT IN ($blockedIds) AND userid NOT IN ($expiredArtists)  AND status=? AND (public != ? AND public != ?)  AND approved=?  ORDER BY id DESC";
             $param = array(1, 3,2,1);
         }elseif ($type == 'my-stream') {
-            $followingIds = array($typeId);
-            if (model('user')->isLoggedIn() and $typeId = model('user')->authId) {
+            $followingIds = [(int)$typeId];
+            if (model('user')->isLoggedIn() and $typeId == model('user')->authId) {
                 $expiredArtists = $this->getExpiredArtists($typeId);
             }
             if ($followingIds) {
@@ -360,7 +417,7 @@ class TrackModel extends Model {
                 return array(); //we don't show anything in the stream
             }
         } elseif($type == 'my-reposts') {
-            $followingIds = array($typeId);
+            $followingIds = [(int)$typeId];
             if ($followingIds) {
                 $followingIds = implode(',', $followingIds);
                 $sql = "SELECT  MAX(streamid) as id FROM stream  WHERE poster NOT IN ($blockedIds) AND poster NOT IN ($expiredArtists)  AND  stream.poster IN ($followingIds) AND (action=? OR action=? OR action=?) GROUP BY trackid,playlist_id ORDER BY id DESC";
@@ -433,7 +490,9 @@ class TrackModel extends Model {
 
 
 
-        $sql .= "  LIMIT {$limit} OFFSET {$offset} ";
+        $sql .= " LIMIT ? OFFSET ? ";
+        $param[] = paginationNumber($limit, true);
+        $param[] = paginationNumber($offset, false);
         //exit($sql);
         //if (Request::instance()->segment(0) === 'api') exit($sql);
         try{
@@ -496,23 +555,7 @@ class TrackModel extends Model {
 
 
     public function getDownloadUrl($track) {
-
-
-        $trackUrl = getController()->getFileUri($track['track_file'], false);
-        if (isset($track['download_hash'])) {
-            return  url('track/download', array('key' => $track['download_hash']));
-        }
-        if (preg_match("#http#", $trackUrl)) {
-            return $trackUrl;
-        } else {
-            if (isset($track['download_hash'])) {
-                return  url('track/download', array('key' => $track['download_hash']));
-            }
-        }
-
-        $trackUrl = $this->getTrackFile($trackUrl);
-        $trackUrl = Hook::getInstance()->fire('track.download.url', $trackUrl, array($track));
-        return $trackUrl;
+        return url('track/download', ['key' => ($track['download_hash'] ?? '') ?: $track['id']]);
     }
 
     public function trackUrl($track = null, $trackId = null, $slug = '') {
@@ -674,30 +717,31 @@ class TrackModel extends Model {
         $blockedIds = $this->C->model('user')->blockIds();
         if ($typeId == 'collection') {
             $sql = "SELECT * FROM playlist WHERE (userid=? OR id IN (SELECT typeid FROM likes WHERE type=? AND typeid=playlist.id AND userid=? )) AND playlist_type=? AND userid NOT IN ($blockedIds)";
-            $sql .= " ORDER BY id DESC LIMIT $limit OFFSET $offset";
+            $sql .= " ORDER BY id DESC LIMIT ? OFFSET ?";
             $playlistType = ($type == 'playlist') ? 1 : 0;
-            $query = $this->db->query($sql, $userid, 'playlist', $userid, $playlistType);
+            $query = $this->db->query($sql, $userid, 'playlist', $userid, $playlistType, paginationNumber($limit,true), paginationNumber($offset,false));
             return $query->fetchAll(PDO::FETCH_ASSOC);
-        } elseif ($typeId == 'discover') {
+        } elseif ($typeId == 'discover' || $typeId == 'top') {
             $sql = "SELECT *,(SELECT count(typeid) as types FROM likes WHERE type=? AND typeid=playlist.id) as count FROM playlist WHERE  playlist_type=? AND public = ? AND userid NOT IN ($blockedIds)";
-            $sql .= " ORDER BY id DESC LIMIT $limit OFFSET $offset";
+            $sql .= ($typeId === 'top') ? " ORDER BY count DESC, id DESC" : " ORDER BY id DESC";
+            $sql .= " LIMIT ? OFFSET ?";
             $playlistType = ($type == 'playlist') ? 1 : 0;
-            $query = $this->db->query($sql,'playlist', $playlistType, 1);
+            $query = $this->db->query($sql,'playlist', $playlistType, 1, paginationNumber($limit,true), paginationNumber($offset,false));
             return $query->fetchAll(PDO::FETCH_ASSOC);
         } elseif(preg_match("#profile-#", $typeId)) {
             list($profile, $profileId)  = explode('-', $typeId);
             $sql = "SELECT * FROM playlist WHERE (userid=?) AND playlist_type=? AND (public != ? OR userid=?)  AND (public !=? OR userid=?) AND userid NOT IN ($blockedIds)";
-            $sql .= " ORDER BY time DESC LIMIT $limit OFFSET $offset";
+            $sql .= " ORDER BY time DESC LIMIT ? OFFSET ?";
             $playlistType = ($type == 'playlist') ? 1 : 0;
-            $query = $this->db->query($sql, $profileId, $playlistType, 3, $userid, 2, $userid);
+            $query = $this->db->query($sql, $profileId, $playlistType, 3, $userid, 2, $userid, paginationNumber($limit,true), paginationNumber($offset,false));
             return $query->fetchAll(PDO::FETCH_ASSOC);
         } elseif(preg_match("#search-#", $typeId)) {
             list($search, $term)  = explode('-', $typeId);
             $sql = "SELECT * FROM playlist WHERE (name LIKE ? OR description LIKE ? ) AND playlist_type=? AND public =? AND userid NOT IN ($blockedIds)";
-            $sql .= " ORDER BY time DESC LIMIT $limit OFFSET $offset";
+            $sql .= " ORDER BY time DESC LIMIT ? OFFSET ?";
             $term = "%$term%";
             $playlistType = ($type == 'playlist') ? 1 : 0;
-            $query = $this->db->query($sql, $term,$term, $playlistType, 1);
+            $query = $this->db->query($sql, $term,$term, $playlistType, 1, paginationNumber($limit,true), paginationNumber($offset,false));
             return $query->fetchAll(PDO::FETCH_ASSOC);
         }
     }
@@ -716,10 +760,13 @@ class TrackModel extends Model {
         $sql = "SELECT track FROM playlistentries WHERE playlist=? AND track !=?  ";
 
         $sql .= " ORDER BY id ASC";
+        $params = [$id,$trackId];
         if ($limit) {
-            $sql .= " LIMIT $limit OFFSET $offset ";
+            $sql .= " LIMIT ? OFFSET ? ";
+            $params[] = paginationNumber($limit,true);
+            $params[] = paginationNumber($offset ?? 0,false);
         }
-        $query = $this->db->query($sql , $id, $trackId);
+        $query = $this->db->query($sql,$params);
 
         $result = array();
         if ($query) {
@@ -832,8 +879,8 @@ class TrackModel extends Model {
             $sql .= " AND id NOT IN ($reportedIds) ";
         }
 
-        $sql .= "ORDER BY id desc LIMIT {$limit} OFFSET {$offset}";
-        $query = $this->db->query($sql, $type, $typeId);
+        $sql .= "ORDER BY id desc LIMIT ? OFFSET ?";
+        $query = $this->db->query($sql, $type, $typeId, paginationNumber($limit,true), paginationNumber($offset,false));
         return $query->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -848,8 +895,8 @@ class TrackModel extends Model {
             $sql .= " AND id NOT IN ($reportedIds) ";
         }
 
-        $sql .= "ORDER BY id desc LIMIT {$limit} ";
-        $query = $this->db->query($sql, $type, $typeId);
+        $sql .= "ORDER BY id desc LIMIT ?";
+        $query = $this->db->query($sql, $type, $typeId, min(500, paginationNumber($limit,false)));
         return $query->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -903,7 +950,7 @@ class TrackModel extends Model {
 
     public function getLikes($type, $typeId, $limit = 15, $offset = 0) {
         $blockedIds = $this->C->model('user')->blockIds();
-        $query = $this->db->query("SELECT * FROM likes INNER JOIN users ON users.id = likes.userid WHERE id NOT IN($blockedIds) AND type=? AND typeid=?  ORDER BY id DESC LIMIT {$limit} OFFSET {$offset}", $type, $typeId);
+        $query = $this->db->query("SELECT * FROM likes INNER JOIN users ON users.id = likes.userid WHERE id NOT IN($blockedIds) AND type=? AND typeid=?  ORDER BY id DESC LIMIT ? OFFSET ?", $type, $typeId, paginationNumber($limit,true), paginationNumber($offset,false));
         return $query->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -938,8 +985,8 @@ class TrackModel extends Model {
             $sql .= " AND (action=?)";
             $param[] = 'repost-track';
         }
-        $sql .= " ORDER BY stream.streamid DESC LIMIT {$limit} OFFSET {$offset} ";
-        $query = $this->db->query($sql, $param);
+        $sql .= " ORDER BY stream.streamid DESC LIMIT ? OFFSET ? ";
+        $query = $this->db->query($sql, array_merge($param,[paginationNumber($limit,true), paginationNumber($offset,false)]));
         return $query->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -963,7 +1010,7 @@ class TrackModel extends Model {
         return $query->rowCount();
     }
 
-    public function addStream($trackId, $playlistId = 0, $action, $userid = null) {
+    public function addStream($trackId, $playlistId, $action, $userid = null) {
         $userid = ($userid) ? $userid : $this->C->model('user')->authId;
         if ($playlistId != 0)  $trackId = 0;
         //@TODO prevent repost by user here as well
@@ -1023,9 +1070,9 @@ class TrackModel extends Model {
         $sql .= " track=? AND userid !=0 ";
         $param[] = $id;
 
-        $sql .= " ORDER BY userid DESC LIMIT {$limit} OFFSET {$offset} ";
+        $sql .= " ORDER BY userid DESC LIMIT ? OFFSET ? ";
 
-        $query = $this->db->query($sql, $param);
+        $query = $this->db->query($sql, array_merge($param,[paginationNumber($limit,true), paginationNumber($offset,false)]));
         return $result = $query->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -1120,14 +1167,22 @@ class TrackModel extends Model {
 
     public function countTrackStatistics($id, $start, $end = null) {
         $end = ($end) ? $end : time();
-        $tracks = ($id != 'all') ? array($id) : $this->getMyTracksId();
+        $tracks = ($id != 'all' && ctype_digit((string) $id)) ? array((int) $id) : $this->getMyTracksId();
         $tracks[] = 0;
-        $tracks = implode(',', $tracks);
+        $tracks = implode(',', array_map('intval', $tracks));
 
-        $query = $this->db->query("SELECT(SELECT COUNT(track)  FROM views WHERE track IN ($tracks) AND time BETWEEN $start AND $end) as plays,
-        (SELECT COUNT(track) FROM downloads WHERE track IN ($tracks) AND time BETWEEN $start AND $end) as downloads,
-        (SELECT COUNT(typeid) FROM likes WHERE type='track' AND typeid IN ($tracks) AND time BETWEEN $start AND $end) as likes,
-        (SELECT COUNT(typeid) FROM comments WHERE type='track' AND typeid IN ($tracks) AND time BETWEEN $start AND $end) as comments");
+        $query = $this->db->query("SELECT
+        (SELECT COUNT(track) FROM views WHERE track IN ($tracks) AND time BETWEEN ? AND ?) as plays,
+        (SELECT COUNT(track) FROM downloads WHERE track IN ($tracks) AND time BETWEEN ? AND ?) as downloads,
+        (SELECT COUNT(typeid) FROM likes WHERE type='track' AND typeid IN ($tracks) AND time BETWEEN ? AND ?) as likes,
+        (SELECT COUNT(typeid) FROM comments WHERE type='track' AND typeid IN ($tracks) AND time BETWEEN ? AND ?) as comments,
+        (SELECT COUNT(DISTINCT userid) FROM views WHERE userid > 0 AND track IN ($tracks) AND time BETWEEN ? AND ?) as listeners",
+            (int) $start, (int) $end,
+            (int) $start, (int) $end,
+            (int) $start, (int) $end,
+            (int) $start, (int) $end,
+            (int) $start, (int) $end
+        );
         return $query->fetch(PDO::FETCH_ASSOC);
 
     }
@@ -1137,34 +1192,34 @@ class TrackModel extends Model {
         $tracks[] = 0;
         if ($id) $tracks = array($id);
         $end = time();
-        $tracks = implode(',', $tracks);
+        $tracks = implode(',', array_map('intval', $tracks));
         switch($type) {
             case 'plays':
-                $query = $this->db->query("SELECT views.track,tracks.title,tracks.art,tracks.slug,tracks.id,COUNT(views.userid) as count FROM views,tracks WHERE views.track IN ($tracks) AND views.track=tracks.id AND views.time BETWEEN $start AND $end GROUP BY views.track,tracks.title,tracks.art ORDER BY count DESC LIMIT $limit ");
+                $query = $this->db->query("SELECT views.track,tracks.title,tracks.art,tracks.slug,tracks.id,COUNT(views.userid) as count FROM views,tracks WHERE views.track IN ($tracks) AND views.track=tracks.id AND views.time BETWEEN ? AND ? GROUP BY views.track,tracks.title,tracks.art ORDER BY count DESC LIMIT ?", (int)$start, $end, paginationNumber($limit,true));
                 return $query->fetchAll(PDO::FETCH_ASSOC);
                 break;
             case 'likes':
-                $query = $this->db->query("SELECT likes.typeid,tracks.title,tracks.art,tracks.slug,tracks.id,COUNT(likes.userid) as count FROM likes,tracks WHERE likes.type='track' AND likes.typeid IN ($tracks) AND likes.typeid=tracks.id AND likes.time BETWEEN $start AND $end GROUP BY likes.typeid,tracks.title,tracks.art ORDER BY count DESC LIMIT $limit ");
+                $query = $this->db->query("SELECT likes.typeid,tracks.title,tracks.art,tracks.slug,tracks.id,COUNT(likes.userid) as count FROM likes,tracks WHERE likes.type='track' AND likes.typeid IN ($tracks) AND likes.typeid=tracks.id AND likes.time BETWEEN ? AND ? GROUP BY likes.typeid,tracks.title,tracks.art ORDER BY count DESC LIMIT ?", (int)$start, $end, paginationNumber($limit,true));
                 return $query->fetchAll(PDO::FETCH_ASSOC);
                 break;
             case 'comments':
-                $query = $this->db->query("SELECT comments.typeid,tracks.title,tracks.art,tracks.slug,tracks.id,COUNT(comments.userid) as count FROM comments,tracks WHERE comments.type='track' AND comments.typeid IN ($tracks) AND comments.typeid=tracks.id AND comments.time BETWEEN $start AND $end GROUP BY comments.typeid,tracks.title,tracks.art ORDER BY count DESC LIMIT $limit ");
+                $query = $this->db->query("SELECT comments.typeid,tracks.title,tracks.art,tracks.slug,tracks.id,COUNT(comments.userid) as count FROM comments,tracks WHERE comments.type='track' AND comments.typeid IN ($tracks) AND comments.typeid=tracks.id AND comments.time BETWEEN ? AND ? GROUP BY comments.typeid,tracks.title,tracks.art ORDER BY count DESC LIMIT ?", (int)$start, $end, paginationNumber($limit,true));
                 return $query->fetchAll(PDO::FETCH_ASSOC);
                 break;
             case 'users.played':
-                $query = $this->db->query("SELECT views.userid,users.id,users.full_name,users.avatar,users.username,COUNT(views.userid) as count FROM views,users WHERE views.track IN ($tracks) AND views.userid=users.id AND views.time BETWEEN $start AND $end GROUP BY views.userid,users.id,users.full_name,users.username,users.avatar ORDER BY count DESC LIMIT $limit ");
+                $query = $this->db->query("SELECT views.userid,users.id,users.full_name,users.avatar,users.username,COUNT(views.userid) as count FROM views,users WHERE views.track IN ($tracks) AND views.userid=users.id AND views.time BETWEEN ? AND ? GROUP BY views.userid,users.id,users.full_name,users.username,users.avatar ORDER BY count DESC LIMIT ?", (int)$start, $end, paginationNumber($limit,true));
                 return $query->fetchAll(PDO::FETCH_ASSOC);
                 break;
             case 'users.download':
-                $query = $this->db->query("SELECT downloads.userid,users.id,users.full_name,users.avatar,users.username,COUNT(downloads.userid) as count FROM downloads,users WHERE downloads.track IN ($tracks) AND downloads.userid=users.id AND downloads.time BETWEEN $start AND $end GROUP BY downloads.userid,users.id,users.full_name,users.username,users.avatar ORDER BY count DESC LIMIT $limit ");
+                $query = $this->db->query("SELECT downloads.userid,users.id,users.full_name,users.avatar,users.username,COUNT(downloads.userid) as count FROM downloads,users WHERE downloads.track IN ($tracks) AND downloads.userid=users.id AND downloads.time BETWEEN ? AND ? GROUP BY downloads.userid,users.id,users.full_name,users.username,users.avatar ORDER BY count DESC LIMIT ?", (int)$start, $end, paginationNumber($limit,true));
                 return $query->fetchAll(PDO::FETCH_ASSOC);
                 break;
             case 'geo.country':
-                $query = $this->db->query("SELECT users.country,COUNT(users.country) as count FROM views,users WHERE views.track IN ($tracks) AND views.userid=users.id AND users.country!='' AND views.time BETWEEN $start AND $end GROUP BY users.country ORDER BY count DESC LIMIT $limit ");
+                $query = $this->db->query("SELECT users.country,COUNT(users.country) as count FROM views,users WHERE views.track IN ($tracks) AND views.userid=users.id AND users.country!='' AND views.time BETWEEN ? AND ? GROUP BY users.country ORDER BY count DESC LIMIT ?", (int)$start, $end, paginationNumber($limit,true));
                 return $query->fetchAll(PDO::FETCH_ASSOC);
                 break;
             case 'geo.city':
-                $query = $this->db->query("SELECT users.city,COUNT(users.city) as count FROM views,users WHERE views.track IN ($tracks) AND views.userid=users.id AND users.city!='' AND views.time BETWEEN $start AND $end GROUP BY users.city ORDER BY count DESC LIMIT $limit ");
+                $query = $this->db->query("SELECT users.city,COUNT(users.city) as count FROM views,users WHERE views.track IN ($tracks) AND views.userid=users.id AND users.city!='' AND views.time BETWEEN ? AND ? GROUP BY users.city ORDER BY count DESC LIMIT ?", (int)$start, $end, paginationNumber($limit,true));
                 return $query->fetchAll(PDO::FETCH_ASSOC);
                 break;
         }
@@ -1185,7 +1240,7 @@ class TrackModel extends Model {
                 return strtotime('-12 month');
                 break;
             case 'total':
-                return strtotime('first day of January 2018');
+                return strtotime('first day of January 2017');
                 break;
         }
     }
@@ -1210,7 +1265,7 @@ class TrackModel extends Model {
     }
 
     public function replaceWaveImages($limit = 50, $offset = 0, $type = 0) {
-        $query = $this->db->query("SELECT track_file,demo_file,id,wave,wave_colored,demo_wave,demo_wave_colored FROM tracks ORDER BY id DESC LIMIT $limit OFFSET $offset");
+        $query = $this->db->query("SELECT track_file,demo_file,id,wave,wave_colored,demo_wave,demo_wave_colored FROM tracks ORDER BY id DESC LIMIT ? OFFSET ?", paginationNumber($limit,true), paginationNumber($offset,false));
         $result = false;
         while($fetch = $query->fetch(PDO::FETCH_ASSOC)) {
             try {

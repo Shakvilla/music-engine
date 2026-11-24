@@ -108,7 +108,7 @@
                             </form>
                         </div>
                     </div>
-                    <a href="<?php echo url('admin/playlist/delete', array('id' => $playlist['id']))?>" class="btn btn-danger btn-sm confirm "><i class="la la-trash"></i></a>
+                    <button type="button" class="btn btn-danger btn-sm confirm" data-post-url="<?php echo url('admin/playlist/delete', array('id' => $playlist['id']))?>"><i class="la la-trash"></i></button>
                 </td>
             </tr>
         <?php endforeach?>

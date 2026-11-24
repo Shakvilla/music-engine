@@ -4,17 +4,24 @@ namespace Omnipay\Mollie\Test;
 
 use Omnipay\Common\Exception\InvalidRequestException;
 use Omnipay\Mollie\Gateway;
+use Omnipay\Mollie\Message\Request\CancelOrderRequest;
 use Omnipay\Mollie\Message\Request\CompletePurchaseRequest;
+use Omnipay\Mollie\Message\Request\CreateCustomerMandateRequest;
 use Omnipay\Mollie\Message\Request\CreateCustomerRequest;
+use Omnipay\Mollie\Message\Request\FetchCustomerMandatesRequest;
 use Omnipay\Mollie\Message\Request\FetchCustomerRequest;
 use Omnipay\Mollie\Message\Request\FetchIssuersRequest;
 use Omnipay\Mollie\Message\Request\FetchPaymentMethodsRequest;
 use Omnipay\Mollie\Message\Request\FetchTransactionRequest;
 use Omnipay\Mollie\Message\Request\PurchaseRequest;
 use Omnipay\Mollie\Message\Request\RefundRequest;
+use Omnipay\Mollie\Message\Request\RevokeCustomerMandateRequest;
 use Omnipay\Mollie\Message\Request\UpdateCustomerRequest;
 use Omnipay\Tests\GatewayTestCase;
 
+/**
+ * @SuppressWarnings(PHPMD.TooManyPublicMethods)
+ */
 class GatewayTest extends GatewayTestCase
 {
     /**
@@ -22,7 +29,7 @@ class GatewayTest extends GatewayTestCase
      */
     protected $gateway;
 
-    public function setUp()
+    public function setUp(): void
     {
         parent::setUp();
 
@@ -89,11 +96,10 @@ class GatewayTest extends GatewayTestCase
         );
     }
 
-    /**
-     * @expectedException \Omnipay\Common\Exception\InvalidRequestException
-     */
     public function testThatRefundDoesntWorkWithoutAmount()
     {
+        $this->expectException(\Omnipay\Common\Exception\InvalidRequestException::class);
+
         $request = $this->gateway->refund(
             array(
                 'apiKey'               => 'key',
@@ -109,8 +115,8 @@ class GatewayTest extends GatewayTestCase
     {
         $request = $this->gateway->fetchTransaction(
             array(
-                'apiKey'               => 'key',
-                'transactionReference' => 'tr_Qzin4iTWrU'
+                'apiKey' => 'key',
+                'transactionReference' => 'tr_Qzin4iTWrU',
             )
         );
 
@@ -124,10 +130,10 @@ class GatewayTest extends GatewayTestCase
     {
         $request = $this->gateway->createCustomer(
             array(
-                'description'  => 'Test name',
-                'email'        => 'test@example.com',
-                'metadata'     => 'Something something something dark side.',
-                'locale'       => 'nl_NL'
+                'description' => 'Test name',
+                'email' => 'test@example.com',
+                'metadata' => 'Something something something dark side.',
+                'locale' => 'nl_NL',
             )
         );
 
@@ -138,11 +144,12 @@ class GatewayTest extends GatewayTestCase
     {
         $request = $this->gateway->updateCustomer(
             array(
+                'apiKey' => 'key',
                 'customerReference' => 'cst_bSNBBJBzdG',
-                'description'       => 'Test name2',
-                'email'             => 'test@example.com',
-                'metadata'          => 'Something something something dark side.',
-                'locale'            => 'nl_NL'
+                'description' => 'Test name2',
+                'email' => 'test@example.com',
+                'metadata' => 'Something something something dark side.',
+                'locale' => 'nl_NL',
             )
         );
 
@@ -157,11 +164,57 @@ class GatewayTest extends GatewayTestCase
     {
         $request = $this->gateway->fetchCustomer(
             array(
-                'apiKey'            => 'key',
-                'customerReference' => 'cst_bSNBBJBzdG'
+                'apiKey' => 'key',
+                'customerReference' => 'cst_bSNBBJBzdG',
             )
         );
 
         $this->assertInstanceOf(FetchCustomerRequest::class, $request);
+    }
+
+    public function testFetchCustomerMandates()
+    {
+        $request = $this->gateway->fetchCustomerMandates(
+            array(
+                'apiKey' => 'key',
+                'customerReference' => 'cst_bSNBBJBzdG',
+            )
+        );
+
+        $this->assertInstanceOf(FetchCustomerMandatesRequest::class, $request);
+    }
+
+    public function testRevokeCustomerMandate()
+    {
+        $request = $this->gateway->revokeCustomerMandate(
+            array(
+                'apiKey' => "key",
+                "customerReference" => "cst_bSNBBJBzdG",
+                "mandateId" => "mdt_pWUnw6pkBN",
+            )
+        );
+
+        $this->assertInstanceOf(RevokeCustomerMandateRequest::class, $request);
+    }
+
+    public function testCreateCustomerMandate()
+    {
+        $request = $this->gateway->createCustomerMandate(
+            array(
+                'apiKey' => "mykey",
+                'consumerName' => "Customer A",
+                'consumerAccount' => "NL53INGB0000000000",
+                "method" => "directdebit",
+                'customerReference' => 'cst_bSNBBJBzdG',
+                'mandateReference' => "YOUR-COMPANY-MD13804",
+            )
+        );
+
+        $this->assertInstanceOf(CreateCustomerMandateRequest::class, $request);
+    }
+
+    public function testVoid()
+    {
+        $this->assertInstanceOf(CancelOrderRequest::class, $this->gateway->void());
     }
 }

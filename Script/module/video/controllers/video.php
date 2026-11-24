@@ -29,7 +29,7 @@ class VideoController extends Controller {
     }
 
     public function paginate() {
-        $data = perfectUnserialize($this->request->input('data'));
+        $data = readPaginationState($this->request->input('data'), ['type', 'typeId']);
         $type = $data['type'];
         $typeId = $data['typeId'];
         $offset = $this->request->input('offset');

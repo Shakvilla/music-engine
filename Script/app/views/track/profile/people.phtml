@@ -6,7 +6,7 @@
 
 <div
     data-paginate-url="track/people/paginate"
-    data-param="<?php echo perfectSerialize(array('type' => $type, 'page' => $pageType, 'pageId' => $pageId))?>"
+    data-param="<?php echo paginationState(array('type' => $type, 'page' => $pageType, 'pageId' => $pageId))?>"
     class="people-list-container clearfix" data-offset="0" id="people-<?php echo $pageType?>-<?php echo $pageId?>">
     <?php foreach($users as $u):$u = (!isset($u['full_name'])) ? model('user')->getUser($u['userid']) : $u?>
         <?php echo $C->view('user/display-inline', array('user' => $u))?>

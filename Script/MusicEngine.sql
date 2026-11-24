@@ -83,6 +83,8 @@ CREATE TABLE IF NOT EXISTS `chat` (
   `playlistid` varchar(255) COLLATE utf8_unicode_ci DEFAULT NULL,
   `is_read` int(11) NOT NULL DEFAULT '0',
   `time` int(11) NOT NULL,
+  KEY chat_conversation_time (cid,time,id),
+  KEY chat_unread (cid,to_uid,is_read),
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=21 DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
 
@@ -100,6 +102,7 @@ CREATE TABLE IF NOT EXISTS `comments` (
   `message` text NOT NULL,
   `track_at` varchar(255) DEFAULT NULL,
   `time` int(11) NOT NULL,
+  KEY comments_item (type,typeid),
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=121 DEFAULT CHARSET=utf8;
 
@@ -148,6 +151,7 @@ CREATE TABLE IF NOT EXISTS `downloads` (
   `userid` int(11) NOT NULL,
   `track` int(11) NOT NULL,
   `time` int(11) NOT NULL,
+  KEY downloads_track (track),
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=26 DEFAULT CHARSET=utf8;
 
@@ -216,6 +220,7 @@ CREATE TABLE IF NOT EXISTS `likes` (
   `type` varchar(255) NOT NULL,
   `typeid` int(11) NOT NULL,
   `time` int(11) NOT NULL,
+  KEY likes_item_user (type,typeid,userid),
   PRIMARY KEY (`likeid`)
 ) ENGINE=InnoDB AUTO_INCREMENT=102 DEFAULT CHARSET=utf8;
 
@@ -443,6 +448,7 @@ CREATE TABLE IF NOT EXISTS `stream` (
   `action` varchar(255) NOT NULL,
   `playlist_id` varchar(255) DEFAULT NULL,
   `streamtime` int(11) NOT NULL,
+  KEY stream_track_action (trackid,action),
   PRIMARY KEY (`streamid`)
 ) ENGINE=InnoDB AUTO_INCREMENT=246 DEFAULT CHARSET=utf8;
 
@@ -723,6 +729,8 @@ CREATE TABLE IF NOT EXISTS `views` (
   `ip` varchar(11) DEFAULT NULL,
   `track` int(11) NOT NULL,
   `time` int(11) NOT NULL,
+  KEY views_track_user (track,userid),
+  KEY views_time_track (time,track),
   PRIMARY KEY (`viewid`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1497 DEFAULT CHARSET=utf8;
 
@@ -754,3 +762,48 @@ CREATE TABLE IF NOT EXISTS `withdrawals` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8;
 COMMIT;
+CREATE TABLE IF NOT EXISTS auth_credentials (
+    digest BINARY(32) PRIMARY KEY,
+    userid INT NOT NULL,
+    kind VARCHAR(12) NOT NULL,
+    expires BIGINT NOT NULL,
+    KEY credential_owner (userid, kind)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS auth_challenges (
+    userid INT NOT NULL,
+    purpose VARCHAR(16) NOT NULL,
+    digest BINARY(32) NOT NULL,
+    expires BIGINT NOT NULL,
+    attempts TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    PRIMARY KEY (userid, purpose)
+) ENGINE=InnoDB;
+CREATE TABLE IF NOT EXISTS chart_counts (
+    track INT NOT NULL,
+    period VARCHAR(16) NOT NULL,
+    plays BIGINT UNSIGNED NOT NULL,
+    PRIMARY KEY (period,track)
+) ENGINE=InnoDB;
+CREATE TABLE IF NOT EXISTS chart_refresh (
+    id TINYINT PRIMARY KEY,
+    refreshed_at BIGINT NOT NULL
+) ENGINE=InnoDB;
+CREATE TABLE IF NOT EXISTS checkout_orders (
+    id CHAR(32) PRIMARY KEY, userid INT NOT NULL, item_type VARCHAR(32) NOT NULL,
+    item_id VARCHAR(255) NOT NULL, base_price DECIMAL(14,2) NOT NULL,
+    amount DECIMAL(14,2) NOT NULL, currency CHAR(3) NOT NULL,
+    provider VARCHAR(16), reference_id VARCHAR(255), settlement_id VARCHAR(255),
+    state VARCHAR(16) NOT NULL DEFAULT 'pending', created_at BIGINT NOT NULL,
+    UNIQUE KEY settlement (provider,settlement_id)
+) ENGINE=InnoDB;
+CREATE TABLE IF NOT EXISTS stripe_events (
+    id VARCHAR(255) PRIMARY KEY
+) ENGINE=InnoDB;
+CREATE TABLE IF NOT EXISTS media_tickets (
+ digest BINARY(32) PRIMARY KEY, userid INT NOT NULL, track INT NOT NULL,
+ purpose VARCHAR(12) NOT NULL, expires BIGINT NOT NULL, KEY media_expiry (expires)
+) ENGINE=InnoDB;
+CREATE TABLE IF NOT EXISTS archive_jobs (
+ id CHAR(64) PRIMARY KEY, manifest JSON NOT NULL, state VARCHAR(12) NOT NULL DEFAULT 'pending',
+ attempts INT NOT NULL DEFAULT 0, updated_at BIGINT NOT NULL, KEY job_queue (state,updated_at)
+) ENGINE=InnoDB;
